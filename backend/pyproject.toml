@@ -1,0 +1,18 @@
+# FIDES backend — tool configuration only (B0: Repository/bootstrap).
+# This file intentionally does NOT define a build system or package metadata.
+# Dependency management for B0 uses requirements.txt / requirements-dev.txt.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = []
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["../tests/backend"]
+pythonpath = ["."]
+addopts = "-ra"
