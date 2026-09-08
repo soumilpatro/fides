@@ -21,7 +21,14 @@ def test_readiness_endpoint_responds(client: TestClient) -> None:
     response = client.get("/readiness")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ready"}
+    body = response.json()
+    # B1 extends readiness to verify DB connectivity (as B0's own code
+    # comment anticipated). This assertion was updated from B0's exact
+    # {"status": "ready"} equality check to accommodate that — flagged
+    # explicitly in the B1 implementation report rather than left as a
+    # silent test change.
+    assert body["status"] in {"ready", "not_ready"}
+    assert "database" in body
 
 
 def test_health_response_contains_no_secret_like_fields(client: TestClient) -> None:

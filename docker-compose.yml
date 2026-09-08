@@ -1,0 +1,41 @@
+# FIDES local development infrastructure (B1: Database Foundation)
+#
+# Single PostgreSQL container with two isolated databases:
+#   - fides_dev  : development database
+#   - fides_test : dedicated test database, never used for development data
+#
+# The second database is created via the init script mounted below, since
+# the official postgres image's POSTGRES_DB variable only creates one
+# database on first initialization.
+#
+# This file provisions infrastructure only. No application roles/grants
+# are created here — see docs/database-roles.md for the least-privilege
+# requirement, which is intentionally documented separately rather than
+# implemented via this compose file or via Alembic migrations (B1 decision).
+
+services:
+  db:
+    image: postgres:16
+    container_name: fides_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fides
+      POSTGRES_PASSWORD: fides_local_dev_only
+      POSTGRES_DB: fides_dev
+    ports:
+      # Host port 5433 -> container port 5432. Host port changed from the
+      # Postgres default (5432) to avoid colliding with a locally-installed
+      # Postgres or another project's container; the container's internal
+      # port is unchanged.
+      - "5433:5432"
+    volumes:
+      - fides_postgres_data:/var/lib/postgresql/data
+      - ./database/init/01-create-test-db.sql:/docker-entrypoint-initdb.d/01-create-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fides -d fides_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  fides_postgres_data:

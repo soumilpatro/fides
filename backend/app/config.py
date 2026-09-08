@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     port: int = 8000
 
+    # Database (B1). No defaults containing real credentials; the values in
+    # .env.example are local-only Docker Compose development values.
+    database_url: str = ""
+    test_database_url: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

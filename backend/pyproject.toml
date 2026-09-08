@@ -9,7 +9,17 @@ src = ["app", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-ignore = []
+# B008: FastAPI's `Depends(...)` in a parameter default is the framework's
+# own documented, idiomatic dependency-injection pattern, not a bug.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic revision files follow Alembic's own generated script template
+# (typing.Union/Sequence style, import ordering) — left as Alembic's
+# standard idiom rather than hand-restyled, consistent with how these
+# files are normally regenerated/extended by `alembic revision`.
+"migrations/versions/*.py" = ["UP035", "UP007", "I001"]
+"migrations/env.py" = ["I001"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
