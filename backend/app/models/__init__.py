@@ -10,6 +10,9 @@ autogenerate support.
 from app.db.base import Base
 from app.models.audit_log import AuditLog
 from app.models.auth_identity import AuthIdentity
+from app.models.auth_otp_challenge import AuthOtpChallenge
+from app.models.auth_rate_limit_bucket import AuthRateLimitBucket
+from app.models.auth_session import AuthSession
 from app.models.commitment import Commitment
 from app.models.commitment_installment import CommitmentInstallment
 from app.models.commitment_terms_version import CommitmentTermsVersion
@@ -26,6 +29,9 @@ __all__ = [
     "Base",
     "User",
     "AuthIdentity",
+    "AuthOtpChallenge",
+    "AuthRateLimitBucket",
+    "AuthSession",
     "Connection",
     "Commitment",
     "CommitmentTermsVersion",

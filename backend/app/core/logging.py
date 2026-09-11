@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sys
 import uuid
 from contextvars import ContextVar
@@ -29,6 +30,13 @@ from starlette.responses import Response
 
 _REQUEST_ID_HEADER = "X-Request-ID"
 _request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
+
+
+def sanitize_request_id(value: str | None) -> str:
+    """Accept bounded ASCII correlation IDs; never reflect arbitrary header text."""
+    if value and re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value):
+        return value
+    return str(uuid.uuid4())
 
 
 class _JsonFormatter(logging.Formatter):
@@ -84,13 +92,16 @@ class RequestCorrelationMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         incoming_id = request.headers.get(_REQUEST_ID_HEADER)
-        request_id = incoming_id if incoming_id else str(uuid.uuid4())
+        request_id = sanitize_request_id(incoming_id)
+        request.state.request_id = request_id
         token = _request_id_ctx.set(request_id)
         try:
             response = await call_next(request)
         finally:
             _request_id_ctx.reset(token)
         response.headers[_REQUEST_ID_HEADER] = request_id
+        if request.url.path.startswith(("/api/v1/auth/", "/api/v1/me")):
+            response.headers["Cache-Control"] = "no-store"
         return response
 
 

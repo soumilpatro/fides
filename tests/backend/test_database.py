@@ -15,28 +15,15 @@ layer yet to exercise.
 
 All tests in this file require a reachable TEST_DATABASE_URL (the
 dedicated test database from docker-compose.yml). If it is not
-configured, `db_engine` in conftest.py skips them.
+configured, `db_engine` in conftest.py fails the required database suite.
 """
 
 import uuid
-from pathlib import Path
 
 import pytest
 from alembic import command
-from alembic.config import Config
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-
-BACKEND_DIR = Path(__file__).resolve().parents[2] / "backend"
-
-
-def _alembic_config(database_url: str) -> Config:
-    cfg = Config(str(BACKEND_DIR / "alembic.ini"))
-    cfg.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
-    import os
-
-    os.environ["DATABASE_URL"] = database_url
-    return cfg
 
 
 def test_database_connectivity(db_engine) -> None:
@@ -46,19 +33,14 @@ def test_database_connectivity(db_engine) -> None:
     assert result == 1
 
 
-def test_migration_upgrade_and_downgrade_round_trip(db_engine) -> None:
+def test_migration_upgrade_and_downgrade_round_trip(db_engine, alembic_config) -> None:
     """B1 gate: `alembic upgrade head` and `alembic downgrade base` both work.
 
     Runs the full chain down to base and back up to head against the
     dedicated test database, leaving it migrated to head afterward so
     subsequent tests in this file can rely on the schema existing.
     """
-    # render_as_string(hide_password=False) is required here: str(url)
-    # masks the password as "***" by default (a SQLAlchemy safety
-    # feature for logging), which would break the real connection Alembic
-    # needs to make via the DATABASE_URL environment variable.
-    settings_url = db_engine.url.render_as_string(hide_password=False)
-    cfg = _alembic_config(settings_url)
+    cfg = alembic_config
 
     # Ensure we start from a known state, then exercise both directions.
     command.upgrade(cfg, "head")

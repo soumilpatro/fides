@@ -22,15 +22,18 @@ database) is already running and reachable via `TEST_DATABASE_URL`.
 """
 
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-
+from alembic import command
+from alembic.config import Config
 from app.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session, sessionmaker
 
 
 @pytest.fixture(scope="session")
@@ -42,13 +45,39 @@ def db_engine():
     """
     settings = get_settings()
     if not settings.test_database_url:
-        pytest.skip(
-            "TEST_DATABASE_URL is not configured; skipping tests that require "
-            "the dedicated test database."
-        )
+        pytest.fail("TEST_DATABASE_URL must be configured for the required PostgreSQL suite.")
+    test_url = make_url(settings.test_database_url)
+    if test_url.get_backend_name() != "postgresql" or test_url.database != "fides_test":
+        pytest.fail("Database tests require the dedicated PostgreSQL fides_test database.")
+    if settings.database_url and make_url(settings.database_url).database == test_url.database:
+        pytest.fail("TEST_DATABASE_URL must be distinct from the development database.")
     engine = create_engine(settings.test_database_url, future=True)
-    yield engine
-    engine.dispose()
+    try:
+        # A libpq/query override can change the actual database independently of
+        # the URL path. Check the connected database before any migration DDL.
+        with engine.connect() as connection:
+            if connection.execute(text("SELECT current_database()")).scalar_one() != "fides_test":
+                pytest.fail("Connected database must be fides_test before running migrations.")
+        # Schema readiness must not depend on the migration test running first.
+        backend = Path(__file__).resolve().parents[2] / "backend"
+        cfg = Config(str(backend / "alembic.ini"))
+        cfg.set_main_option("script_location", str(backend / "migrations"))
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv("DATABASE_URL", settings.test_database_url)
+            command.upgrade(cfg, "head")
+        yield engine
+    finally:
+        engine.dispose()
+
+
+@pytest.fixture
+def alembic_config(db_engine, monkeypatch) -> Config:
+    """Migration operations use only the already validated test database."""
+    backend = Path(__file__).resolve().parents[2] / "backend"
+    cfg = Config(str(backend / "alembic.ini"))
+    cfg.set_main_option("script_location", str(backend / "migrations"))
+    monkeypatch.setenv("DATABASE_URL", db_engine.url.render_as_string(hide_password=False))
+    return cfg
 
 
 @pytest.fixture
