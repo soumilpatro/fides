@@ -28,6 +28,7 @@ def _build_engine():
         max_overflow=10,
         pool_timeout=30,
         future=True,
+        hide_parameters=True,  # SQL exceptions must not expose credential/PII bind values.
     )
 
 
