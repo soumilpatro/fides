@@ -575,3 +575,378 @@ These intentionally deferred items do not block B2 backend implementation. Real 
 **B2 Identity & Authentication architecture: APPROVED FOR IMPLEMENTATION.** Proceed only through bounded B2.x tasks with tests/review gates. Suitable boundaries are contract/config validation; additive persistence; token primitives; shared limits; provider integration; challenge coordination; account creation/login; refresh; logout-only recognition; /me; deactivation; and operational/regression verification. Each state-changing task includes its audit/logging safeguards rather than deferring them to the end.
 
 This decision does not authorize future product scope, financial workflow implementation, or unrelated architecture changes. The B2-D2 task records this contract in DECISIONS.md only; it does not implement B2, modify specification/backend files, create migrations, install dependencies, stage, commit, or push.
+
+## B4-D0 — Approved MVP Connection Lifecycle Contract
+
+- Date: 2026-09-12
+- Status: APPROVED founder/product decision; recorded before B4 implementation.
+- Scope: B4 — Connections.
+- Authority: This explicit founder decision resolves the B4 contract gaps left unspecified by the checked-in Master Product, Tech, Database, API, and AI Build specifications.
+- Relationship remains distinct from financial commitment. Connection lifecycle changes must never delete, mutate, or determine authorization for existing financial history.
+
+### 1. Public B4 API surface
+
+Exactly:
+
+POST   /api/v1/connections
+GET    /api/v1/connections
+GET    /api/v1/connections/{id}
+POST   /api/v1/connections/{id}/accept
+POST   /api/v1/connections/{id}/reject
+POST   /api/v1/connections/{id}/block
+DELETE /api/v1/connections/{id}
+
+Do not add search/discovery, unblock, restore, or other connection endpoints in B4.
+
+### 2. Create request
+
+POST /api/v1/connections request body is exactly:
+
+{
+  "phone": "+919876543210"
+}
+
+Rules:
+
+- phone is a required non-null string
+- reject unknown fields
+- normalize/validate using the same strict E.164 rules as B2
+- authenticated current user is always requester
+- client cannot supply requester/current-user ID
+- recipient is resolved from an existing ACTIVE Fides account by canonical phone
+- unknown, unavailable, or deactivated recipient returns generic:
+  404 NOT_FOUND
+  "Unavailable resource."
+- self-connection returns:
+  422 VALIDATION_ERROR
+- no public user/contact discovery is introduced
+
+### 3. Connection response
+
+ConnectionResponse contains exactly:
+
+- id
+- status
+- requester:
+  - id
+  - display_name
+- recipient:
+  - id
+  - display_name
+- created_at
+- updated_at
+
+Do not return either participant's phone number through the connection response.
+
+Do not expose:
+- AuthIdentity data
+- session data
+- credential/token data
+- financial history
+- unrelated profile fields
+
+### 4. Create success and initial state
+
+A successful new request returns:
+
+- HTTP 201
+- ConnectionResponse
+- status = PENDING
+- requester = authenticated actor
+- recipient = resolved target user
+- server-generated UUID/timestamps
+
+Creation + audit must be atomic.
+
+### 5. List
+
+GET /api/v1/connections:
+
+- returns only relationships where current user is requester or recipient
+- response is an array of ConnectionResponse
+- order by updated_at descending
+- no pagination/filter/query contract in B4 MVP
+- unrelated relationships must never be returned
+
+### 6. Detail
+
+GET /api/v1/connections/{id}:
+
+- requester or recipient may read
+- unrelated authenticated user receives 404 NOT_FOUND
+- missing and unauthorized resources share the same unavailable-resource behavior
+- return ConnectionResponse only
+
+### 7. Accept
+
+POST /api/v1/connections/{id}/accept:
+
+Allowed only when:
+- actor is recipient
+- current status is PENDING
+
+Transition:
+
+PENDING -> ACCEPTED
+
+Results:
+- success: 200 ConnectionResponse
+- requester attempting accept: 403 FORBIDDEN
+- unrelated actor/resource: 404 NOT_FOUND
+- wrong current state: 409 INVALID_STATE
+
+Mutation + audit commit atomically.
+
+Accepting creates no commitment or financial record.
+
+### 8. Reject
+
+POST /api/v1/connections/{id}/reject:
+
+Allowed only when:
+- actor is recipient
+- current status is PENDING
+
+Because the approved connection enum has no REJECTED state:
+
+PENDING -> REMOVED
+
+The persisted relationship row is preserved.
+
+Results:
+- success: 200 ConnectionResponse
+- requester attempting reject: 403 FORBIDDEN
+- unrelated actor/resource: 404 NOT_FOUND
+- wrong state: 409 INVALID_STATE
+
+Record semantic audit action:
+
+CONNECTION_REJECTED
+
+Do not hard-delete the connection.
+
+### 9. Block
+
+POST /api/v1/connections/{id}/block:
+
+Either participant may block when status is:
+
+- PENDING
+- ACCEPTED
+
+Transition:
+
+PENDING  -> BLOCKED
+ACCEPTED -> BLOCKED
+
+BLOCKED is terminal for B4 MVP.
+
+There is no unblock endpoint.
+
+Repeated block or block from REMOVED/BLOCKED returns:
+
+409 INVALID_STATE
+
+Unrelated actor/resource returns:
+
+404 NOT_FOUND
+
+Do not expose which participant initiated a previous block through public error behavior.
+
+Blocking:
+- preserves connection row
+- preserves commitments
+- preserves repayments
+- preserves ledger/audit history
+- does not alter financial balances
+- does not remove lender/borrower authorization to existing commitments
+
+Record:
+
+CONNECTION_BLOCKED
+
+### 10. Remove / DELETE
+
+DELETE /api/v1/connections/{id}
+
+DELETE is a soft relationship-state transition, never a row deletion.
+
+Allowed:
+
+Requester may cancel own PENDING request:
+
+PENDING -> REMOVED
+
+Either participant may remove:
+
+ACCEPTED -> REMOVED
+
+Not allowed:
+
+BLOCKED -> anything
+REMOVED -> anything
+
+Those return:
+
+409 INVALID_STATE
+
+Unrelated actor/resource:
+
+404 NOT_FOUND
+
+Successful DELETE returns:
+
+200 ConnectionResponse
+
+Record:
+
+CONNECTION_REMOVED
+
+For recipient rejection of PENDING, use the dedicated reject endpoint and semantic CONNECTION_REJECTED audit.
+
+### 11. Reconnection
+
+REMOVED relationships may later reconnect.
+
+Because the current schema uniquely identifies the pair across statuses, a new POST for a previously REMOVED pair:
+
+- reuses the existing Connection row
+- updates requester_user_id to the new authenticated requester
+- updates recipient_user_id to the newly resolved recipient
+- sets status = PENDING
+- advances updated_at
+- preserves original created_at
+- does not delete historical audit records
+
+This is treated as a new request semantically and records:
+
+CONNECTION_REQUESTED
+
+Do not create a separate RECONNECTED state or audit action.
+
+### 12. Duplicate-pair behavior
+
+The user pair is symmetric for uniqueness purposes.
+
+For an existing pair:
+
+PENDING:
+- new POST in either direction -> 409 CONFLICT
+
+ACCEPTED:
+- new POST in either direction -> 409 CONFLICT
+
+BLOCKED:
+- new POST in either direction -> 409 CONFLICT
+- response must not disclose which user blocked
+
+REMOVED:
+- allowed to create a new request by reusing the existing row as defined above
+
+The service must prevent duplicate authoritative pair rows during:
+
+- simultaneous A -> B and B -> A requests
+- simultaneous A -> B requests
+- normal retries/races
+
+Use canonical/symmetric pair coordination.
+
+If the existing schema cannot enforce this safely without migration, implementation must stop and report before creating any migration.
+
+### 13. Idempotency
+
+B4 does not require Idempotency-Key.
+
+The existing API requirement for mandatory idempotency applies to financial mutations.
+
+Connection duplicate protection is provided by pair uniqueness, locking, and lifecycle checks.
+
+Do not silently introduce a new B4 idempotency API contract.
+
+### 14. Audits
+
+Use exactly these semantic connection audit actions:
+
+- CONNECTION_REQUESTED
+- CONNECTION_ACCEPTED
+- CONNECTION_REJECTED
+- CONNECTION_BLOCKED
+- CONNECTION_REMOVED
+
+A request after REMOVED records CONNECTION_REQUESTED again.
+
+State mutation and audit commit atomically.
+
+Audit failure rolls back the connection mutation.
+
+Do not store unnecessary phone/profile PII, tokens, credential hashes, or Authorization data in audit metadata.
+
+### 15. Stable error mapping
+
+Use the existing stable error vocabulary:
+
+- unrelated/missing protected connection:
+  404 NOT_FOUND
+
+- authenticated participant lacks the required actor role for the requested action:
+  403 FORBIDDEN
+
+- invalid lifecycle transition/repeated terminal action:
+  409 INVALID_STATE
+
+- duplicate/colliding active pair creation:
+  409 CONFLICT
+
+- self-connection or request schema violation:
+  422 VALIDATION_ERROR
+
+- malformed JSON:
+  400 MALFORMED_REQUEST
+
+- unexpected internal/database failure:
+  safe generic 500/SERVICE_UNAVAILABLE according to existing backend conventions
+
+Do not invent a new connection-specific public error code.
+
+### 16. Financial separation invariant
+
+Connection lifecycle must never:
+
+- create a Commitment
+- alter a Commitment
+- delete a Commitment
+- delete Repayment or Verification history
+- delete LedgerEvent/AuditLog records
+- grant access to unrelated financial records
+- revoke lender/borrower access to an existing commitment
+
+Financial authorization continues to derive from direct commitment participation under B3, not current connection status.
+
+### 17. B4 implementation boundary
+
+B4 implements only:
+
+- connection create
+- list
+- detail
+- accept
+- reject
+- block
+- remove
+- reconnection from REMOVED
+- required connection audits
+- authorization/concurrency/API tests
+
+B4 does not implement:
+
+- commitments
+- terms/installments
+- repayments
+- verification
+- ledger APIs
+- extensions
+- notifications
+- trust graph
+- user/contact discovery
+- unblock workflow
+- payments
