@@ -85,6 +85,16 @@ class AuthError(Exception):
         super().__init__(code)
 
 
+class ResourceUnavailable(Exception):
+    """Tech Spec v1.1 NOT_FOUND / API Spec v1.0 unavailable-resource contract."""
+
+    code = "NOT_FOUND"
+    message = "Unavailable resource."
+
+    def __init__(self):
+        super().__init__(self.code)
+
+
 def _is_auth_request(request: Request) -> bool:
     return request.url.path.startswith(("/api/v1/auth/", "/api/v1/me"))
 
@@ -110,6 +120,16 @@ def _error_envelope(code: str, message: str) -> dict:
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Register generic, safe exception handlers on the FastAPI app."""
+
+    @app.exception_handler(ResourceUnavailable)
+    async def resource_unavailable_handler(
+        request: Request, exc: ResourceUnavailable
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content=_error_envelope(exc.code, exc.message),
+            headers=_response_headers(request, auth=True),
+        )
 
     @app.exception_handler(AuthError)
     async def auth_exception_handler(request: Request, exc: AuthError) -> JSONResponse:
