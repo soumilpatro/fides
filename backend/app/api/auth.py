@@ -61,6 +61,28 @@ router = APIRouter(
 bearer = HTTPBearer(auto_error=False)
 
 
+def authorization_header(request: Request) -> str | None:
+    values = request.headers.getlist("Authorization")
+    if len(values) > 1:
+        raise AuthError("INVALID_AUTH_TOKEN")
+    return values[0] if values else None
+
+
+async def require_empty_body(request: Request):
+    # Absence and {} are accepted; explicit JSON null is not an empty object.
+    raw = await request.body()
+    if raw:
+        try:
+            EmptyAuthRequest.model_validate_json(raw)
+        except ValidationError as error:
+            code = (
+                "MALFORMED_REQUEST"
+                if any(item["type"] == "json_invalid" for item in error.errors())
+                else "VALIDATION_ERROR"
+            )
+            raise AuthError(code) from None
+
+
 def get_auth_service(request: Request) -> ChallengeService:
     service = getattr(request.app.state, "auth_service", None)
     if service is None:
@@ -140,24 +162,10 @@ async def logout(
     service=Depends(get_auth_service),
     _bearer: Annotated[object, Depends(bearer)] = None,
 ):
-    # Absent body and {} are distinct from explicit JSON null in this contract.
-    raw = await request.body()
-    if raw:
-        try:
-            EmptyAuthRequest.model_validate_json(raw)
-        except ValidationError as error:
-            code = (
-                "MALFORMED_REQUEST"
-                if any(item["type"] == "json_invalid" for item in error.errors())
-                else "VALIDATION_ERROR"
-            )
-            raise AuthError(code) from None
-    authorizations = request.headers.getlist("Authorization")
-    if len(authorizations) > 1:
-        raise AuthError("INVALID_AUTH_TOKEN")
+    await require_empty_body(request)
     recognition = await run_in_threadpool(
         service.session_service.recognize_logout,
-        authorizations[0] if authorizations else None,
+        authorization_header(request),
     )
     await run_in_threadpool(
         service.session_service.revoke_one, recognition, request_id=request.state.request_id

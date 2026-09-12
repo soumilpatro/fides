@@ -274,7 +274,7 @@ def test_logout_response_requires_boolean_true(value):
         LogoutResponse(logged_out=value)
 
 
-def test_only_approved_b2c_routes_are_registered():
+def test_only_approved_b2_routes_are_registered():
     from app.main import create_app
 
     assert set(create_app().openapi()["paths"]) == {
@@ -284,4 +284,6 @@ def test_only_approved_b2c_routes_are_registered():
         "/api/v1/auth/otp/verify",
         "/api/v1/auth/refresh",
         "/api/v1/auth/logout",
+        "/api/v1/me",
+        "/api/v1/me/deactivate",
     }

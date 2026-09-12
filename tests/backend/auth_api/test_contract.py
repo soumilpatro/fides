@@ -17,6 +17,8 @@ def test_openapi_closed_variants_errors_and_bearer():
     assert set(schema["paths"]) == {
         "/health",
         "/readiness",
+        "/api/v1/me",
+        "/api/v1/me/deactivate",
         *[BASE + suffix for suffix in ["/otp/request", "/otp/verify", "/refresh", "/logout"]],
     }
     for suffix in ["/otp/request", "/otp/verify", "/refresh", "/logout"]:

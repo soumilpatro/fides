@@ -30,6 +30,7 @@ from app.models.user import User
 class Principal:
     user_id: UUID
     session_id: UUID
+    _digest: bytes = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,18 @@ class SessionService:
         )
 
     @staticmethod
+    def user_response(user: User) -> MeResponse:
+        return MeResponse(
+            id=user.id,
+            phone_e164=user.phone_e164,
+            display_name=user.display_name,
+            timezone=user.timezone,
+            status="ACTIVE",
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+        )
+
+    @staticmethod
     def _response(session, user, access, refresh):
         return CredentialResponse(
             access_token=access,
@@ -94,15 +107,7 @@ class SessionService:
             token_type="Bearer",
             access_expires_at=session.access_expires_at,
             refresh_expires_at=session.refresh_expires_at,
-            user=MeResponse(
-                id=user.id,
-                phone_e164=user.phone_e164,
-                display_name=user.display_name,
-                timezone=user.timezone,
-                status="ACTIVE",
-                created_at=user.created_at,
-                updated_at=user.updated_at,
-            ),
+            user=SessionService.user_response(user),
         )
 
     def _create_locked(self, db: Session, user: User, intent: str, request_id=None):
@@ -155,9 +160,32 @@ class SessionService:
                 _active(user)
                 if utc_now(self.clock, db) >= session.access_expires_at:
                     raise AuthError("AUTH_TOKEN_EXPIRED")
-                return Principal(user.id, session.id)
+                return Principal(user.id, session.id, digest)
         except SQLAlchemyError:
             raise AuthError("SERVICE_UNAVAILABLE") from None
+
+    def revalidate_user_locked(self, db: Session, principal: Principal) -> User:
+        """Lock User, then recheck current credential/status/expiry for an account operation.
+
+        Every runtime session writer holds this User lock. Read the session without
+        taking it out of UUID order before a possible revoke-all operation.
+        Retention cannot remove an unexpired session. Callers own the transaction.
+        """
+        if not isinstance(principal, Principal):
+            raise TypeError("Ordinary authenticated principal required")
+        user = db.scalar(select(User).where(User.id == principal.user_id).with_for_update())
+        session = db.scalar(select(AuthSession).where(AuthSession.id == principal.session_id))
+        if (
+            session is None
+            or session.user_id != principal.user_id
+            or not digest_matches(principal._digest, session.access_token_hash)
+        ):
+            raise AuthError("INVALID_AUTH_TOKEN")
+        _not_revoked(session)
+        _active(user)
+        if utc_now(self.clock, db) >= session.access_expires_at:
+            raise AuthError("AUTH_TOKEN_EXPIRED")
+        return user
 
     @auth_operation
     def recognize_logout(self, authorization: str | None) -> LogoutRecognition:

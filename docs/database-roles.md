@@ -74,6 +74,32 @@ hardening, and B15: Integration & release), where the actual mechanism
 script outside the application's own migration chain) can be decided
 deliberately rather than folded into ordinary schema migrations.
 
+## B2 authentication runtime and maintenance permissions
+
+Runtime auth requires SELECT/INSERT/UPDATE on `auth_sessions`,
+`auth_otp_challenges`, and `auth_rate_limit_buckets`, plus SELECT/INSERT on
+`auth_identities`. It does not need DELETE on these tables. Existing User and
+append-only AuditLog permissions remain unchanged.
+
+`app.auth.maintenance.cleanup_auth` is an explicitly invoked internal function.
+Supply a session factory using separately authorized maintenance credentials;
+it is not called by HTTP routes or application startup and has no scheduler.
+The maintenance role needs SELECT/DELETE only on the three auth operational
+tables above. Do not grant it DELETE on Users, AuthIdentity, AuditLog or any
+financial/history table. Provisioning these grants remains separate from
+migrations; this document does not execute them.
+
+The function uses configured retention defaults: OTP challenges at expiry +
+24 hours, buckets at window expiry + 24 hours, and sessions at refresh expiry +
+30 days. Equality with the cutoff is eligible. Cleanup returns per-table counts
+after commit; an error rolls back the batch. No account or financial state is
+changed, and deleted credentials/challenges subsequently resolve as unknown.
+
+Deactivation and all runtime session writers coordinate through the User row
+lock. Future financial writers introducing blocking commitments must lock the
+affected Users in stable UUID order and recheck ACTIVE eligibility before their
+write, as required by B2-D2. Direct writes bypassing that protocol are not safe.
+
 ## Local development note
 
 The Docker Compose setup in `docker-compose.yml` (B1) uses a single,

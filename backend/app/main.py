@@ -6,8 +6,8 @@ B0 scope (per AI Development & Backend Build Specification Sec. 9):
 - Consistent error handling
 - Request correlation / structured logging
 
-B2-C adds the four approved authentication endpoints and a provider client
-owned by the application lifespan. Profile/deactivation routes remain B2-D.
+B2 adds the seven approved authentication/account endpoints and a provider
+client owned by the application lifespan.
 
 Launch Uvicorn with --no-proxy-headers: Fides resolves forwarding headers
 against AUTH_TRUSTED_PROXY_CIDRS and needs the original connection peer.
@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from app.api.auth import initialize_auth
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.me import router as me_router
 from app.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import RequestCorrelationMiddleware, configure_logging
@@ -52,7 +53,7 @@ def create_app() -> FastAPI:
         description=(
             "FIDES shared backend. See FIDES_TECH_SPECIFICATION_v1.1 and "
             "FIDES_API_SPECIFICATION_v1.0 for the full product/API contract. "
-            "Includes OTP authentication, session refresh and logout."
+            "Includes OTP authentication, sessions, profile updates and account deactivation."
         ),
     )
 
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(me_router)
 
     return app
 
