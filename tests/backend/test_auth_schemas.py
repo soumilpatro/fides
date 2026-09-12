@@ -274,7 +274,14 @@ def test_logout_response_requires_boolean_true(value):
         LogoutResponse(logged_out=value)
 
 
-def test_foundation_does_not_register_auth_routes():
+def test_only_approved_b2c_routes_are_registered():
     from app.main import create_app
 
-    assert set(create_app().openapi()["paths"]) == {"/health", "/readiness"}
+    assert set(create_app().openapi()["paths"]) == {
+        "/health",
+        "/readiness",
+        "/api/v1/auth/otp/request",
+        "/api/v1/auth/otp/verify",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
+    }

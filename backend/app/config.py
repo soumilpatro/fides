@@ -1,6 +1,7 @@
 """Shared environment configuration, including the approved B2-D2 defaults."""
 
 from functools import lru_cache
+from ipaddress import ip_network
 from typing import Literal
 
 from pydantic import Field, PositiveFloat, PositiveInt, SecretStr, field_validator, model_validator
@@ -52,6 +53,17 @@ class Settings(BaseSettings):
     otp_verify_ip_1h_limit: PositiveInt = 200
     auth_refresh_session_1m_limit: PositiveInt = 10
     auth_refresh_ip_1m_limit: PositiveInt = 60
+    auth_trusted_proxy_cidrs: tuple[str, ...] = ()
+
+    @field_validator("auth_trusted_proxy_cidrs")
+    @classmethod
+    def validate_proxy_networks(cls, values):
+        try:
+            for value in values:
+                ip_network(value, strict=True)
+        except ValueError:
+            raise ValueError("Trusted proxies require valid, strict CIDR networks.") from None
+        return values
 
     twilio_api_key_sid: str = Field(default="", repr=False)
     twilio_api_key_secret: SecretStr = Field(default=SecretStr(""), repr=False)
