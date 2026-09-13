@@ -98,6 +98,21 @@ class ConnectionError(Exception):
         super().__init__(code)
 
 
+class FinancialError(Exception):
+    """B5 implements the approved financial vocabulary without changing B2/B4."""
+
+    def __init__(self, code: str):
+        self.status_code, self.message = {
+            "FORBIDDEN": (403, "Forbidden."),
+            "INVALID_STATE": (409, "Invalid state."),
+            "CONFLICT": (409, "Conflict."),
+            "IDEMPOTENCY_CONFLICT": (409, "Idempotency key conflicts with this request."),
+            "INVALID_AMOUNT": (422, "Invalid amount."),
+        }[code]
+        self.code = code
+        super().__init__(code)
+
+
 class ResourceUnavailable(Exception):
     """Tech Spec v1.1 NOT_FOUND / API Spec v1.0 unavailable-resource contract."""
 
@@ -116,7 +131,11 @@ def _response_headers(
     request: Request, headers: Mapping[str, str] | None = None, *, auth: bool = False
 ) -> dict[str, str]:
     result = MutableHeaders(headers=headers)
-    if auth or _is_auth_request(request) or request.url.path.startswith("/api/v1/connections"):
+    if (
+        auth
+        or _is_auth_request(request)
+        or request.url.path.startswith(("/api/v1/connections", "/api/v1/commitments"))
+    ):
         result["Cache-Control"] = "no-store"
     # State survives middleware ContextVar reset, including unhandled 500s.
     request_id = getattr(request.state, "request_id", None)
@@ -133,6 +152,14 @@ def _error_envelope(code: str, message: str) -> dict:
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Register generic, safe exception handlers on the FastAPI app."""
+
+    @app.exception_handler(FinancialError)
+    async def financial_exception_handler(request: Request, exc: FinancialError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=_error_envelope(exc.code, exc.message),
+            headers=_response_headers(request),
+        )
 
     @app.exception_handler(ConnectionError)
     async def connection_exception_handler(request: Request, exc: ConnectionError) -> JSONResponse:
@@ -193,9 +220,12 @@ def register_exception_handlers(app: FastAPI) -> None:
                 code = "MALFORMED_REQUEST"
             elif types == {"invalid_phone"}:
                 code = "INVALID_PHONE"
-        if request.url.path.startswith("/api/v1/connections"):
+        if request.url.path.startswith(("/api/v1/connections", "/api/v1/commitments")):
             if any(error["type"] == "json_invalid" for error in exc.errors()):
                 code = "MALFORMED_REQUEST"
+        if request.url.path.startswith("/api/v1/commitments") and code != "MALFORMED_REQUEST":
+            if any(error["loc"] == ("body", "principal_amount_minor") for error in exc.errors()):
+                return await financial_exception_handler(request, FinancialError("INVALID_AMOUNT"))
         status_code, message = AUTH_ERRORS[code]
         return JSONResponse(
             status_code=status_code,

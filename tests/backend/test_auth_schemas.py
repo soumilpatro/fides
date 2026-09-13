@@ -280,7 +280,7 @@ def test_only_approved_b2_routes_are_registered():
     assert {
         path
         for path in create_app().openapi()["paths"]
-        if not path.startswith("/api/v1/connections")
+        if not path.startswith(("/api/v1/connections", "/api/v1/commitments"))
     } == {
         "/health",
         "/readiness",
