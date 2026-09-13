@@ -1186,3 +1186,626 @@ B5 should NOT:
 - aggregate different currencies
 - implement B12 summary schemas
 - add location-based currency assumptions
+
+## B5-D1 — Commitment Creation & Lifecycle Contract
+
+Date: 2026-09-13
+Status: APPROVED founder/product decision
+Scope: B5 Commitments only
+
+### 1. Public B5 API surface
+
+Exactly:
+
+POST /api/v1/commitments
+GET /api/v1/commitments
+GET /api/v1/commitments/{id}
+POST /api/v1/commitments/{id}/confirm
+POST /api/v1/commitments/{id}/reject
+POST /api/v1/commitments/{id}/cancel
+
+Deferred from B5:
+- POST /api/v1/commitments/{id}/activate
+- GET /api/v1/commitments/{id}/terms
+- GET /api/v1/commitments/{id}/installments
+- GET /api/v1/commitments/{id}/ledger
+
+No commitment PATCH or DELETE route in B5.
+
+### 2. Create request
+
+POST /api/v1/commitments
+
+Body exactly:
+
+{
+  "connection_id": "uuid",
+  "actor_role": "BORROWER" | "LENDER",
+  "type": "IOU" | "PEER_LOAN",
+  "principal_amount_minor": integer,
+  "currency": "INR" | "USD" | "GBP",
+  "description": string | null
+}
+
+Closed schema. No extra fields.
+
+The authenticated creator is always one financial participant.
+
+The other participant is derived from the supplied Connection.
+
+Do NOT accept:
+- arbitrary borrower user id
+- arbitrary lender user id
+- phone number
+- separate counterparty user id
+
+### 3. Direction
+
+actor_role is relative to the authenticated creator.
+
+If actor_role = BORROWER:
+- current user = borrower
+- other Connection participant = lender
+
+If actor_role = LENDER:
+- current user = lender
+- other Connection participant = borrower
+
+Either participant may propose:
+- “I borrowed”
+- “I lent”
+
+Creator must always be one of the stored borrower/lender participants.
+
+### 4. Commitment types
+
+Enabled immediately in B5:
+
+- IOU
+- PEER_LOAN
+
+No additional type is enabled.
+
+B5 does not attach different lifecycle behavior to these types yet unless already required by approved specifications.
+
+### 5. Connection eligibility for creation
+
+A new Commitment proposal requires:
+
+- existing Connection
+- authenticated creator is a participant in that Connection
+- Connection.status = ACCEPTED
+- both affected accounts currently eligible/active
+
+Creation through:
+
+- PENDING
+- BLOCKED
+- REMOVED
+
+is not allowed.
+
+Missing/unrelated Connection:
+404 NOT_FOUND
+message: "Unavailable resource."
+
+Known participant using non-ACCEPTED Connection:
+409 INVALID_STATE
+
+New proposal creation must coordinate with current account eligibility using the established affected-user locking rules.
+
+### 6. Existing commitment access after Connection changes
+
+Once a Commitment exists:
+
+- lender/borrower participation is the source of financial authorization
+- blocking/removing the Connection does NOT revoke financial read access
+- no Commitment history is deleted
+- no Commitment is re-parented
+- no Commitment is merged
+
+For an existing PENDING_CONFIRMATION Commitment after the Connection becomes BLOCKED or REMOVED:
+
+- proposer may cancel
+- required counterparty may reject
+- confirmation is NOT allowed unless the Connection is currently ACCEPTED
+
+This restriction applies only to activating a still-pending proposal.
+
+### 7. Principal amount
+
+Public field:
+
+principal_amount_minor
+
+Rules:
+
+- required
+- true JSON integer only
+- booleans rejected
+- floats rejected
+- numeric strings rejected
+- > 0
+- maximum:
+  1,000,000,000,000 minor units
+
+Invalid principal amount returns:
+
+422 INVALID_AMOUNT
+
+No floating-point authoritative money.
+
+### 8. Currency
+
+B5-D0 remains authoritative.
+
+Exactly:
+
+- INR
+- USD
+- GBP
+
+Uppercase only.
+
+Do not silently normalize:
+- inr
+- usd
+- gbp
+
+Unsupported or malformed currency returns:
+
+422 VALIDATION_ERROR
+
+Currency is immutable after Commitment creation.
+
+No FX.
+
+### 9. Description
+
+Field:
+
+description
+
+Rules:
+
+- optional
+- nullable
+- string when supplied
+- trim surrounding whitespace
+- maximum 500 characters
+- empty or whitespace-only becomes null
+
+Description is immutable in bounded B5 because no edit/PATCH workflow is approved.
+
+### 10. Initial TermsVersion
+
+Creation must satisfy the existing atomic initial-terms requirement.
+
+B5 creates:
+
+- Commitment
+- initial TermsVersion
+- ledger event
+- audit event
+- successful idempotency result
+
+in one transaction.
+
+The bounded B5 initial TermsVersion represents:
+
+- principal-only obligation
+- no interest
+- no due date
+- no installment schedule
+
+B5 creates NO installments.
+
+B6 will add/finalize:
+- due-date behavior
+- interest
+- schedules
+- installments
+- deterministic term calculations
+- term version changes
+
+B5 must not invent B6 financial behavior.
+
+### 11. Initial status
+
+No public DRAFT workflow in MVP B5.
+
+Creation persists directly as:
+
+PENDING_CONFIRMATION
+
+created_at and updated_at are set.
+
+confirmed_at = null
+activated_at = null
+closed_at = null
+
+### 12. Confirmation
+
+Only the required counterparty may confirm.
+
+The creator may NOT confirm their own proposal.
+
+Valid source state:
+
+PENDING_CONFIRMATION
+
+Connection must currently be ACCEPTED at confirmation time.
+
+Confirmation logically performs:
+
+PENDING_CONFIRMATION
+→ CONFIRMED
+→ ACTIVE
+
+inside one atomic transaction.
+
+Final persisted state returned:
+
+ACTIVE
+
+Set:
+
+confirmed_at
+activated_at
+
+in the same transaction.
+
+CONFIRMED remains a valid persisted enum/state for future compatibility, but no externally callable separate activation step exists in bounded B5.
+
+No separate COMMITMENT_ACTIVATED event is emitted in B5.
+
+### 13. Rejection
+
+Only the required counterparty may reject.
+
+Valid source state:
+
+PENDING_CONFIRMATION
+
+Transition:
+
+PENDING_CONFIRMATION → REJECTED
+
+REJECTED is terminal for B5.
+
+Reject remains allowed even if the Connection later becomes BLOCKED or REMOVED.
+
+No reason field in B5.
+
+### 14. Cancellation
+
+Only the original proposer/creator may cancel.
+
+Valid source state:
+
+PENDING_CONFIRMATION
+
+Transition:
+
+PENDING_CONFIRMATION → CANCELLED
+
+CANCELLED is terminal for B5.
+
+Cancel remains allowed even if the Connection later becomes BLOCKED or REMOVED.
+
+Confirmed/ACTIVE Commitments may NOT be cancelled through B5.
+
+No cancellation reason field in B5.
+
+No hard deletion.
+
+### 15. Terminal lifecycle behavior
+
+For bounded B5:
+
+REJECTED = terminal
+CANCELLED = terminal
+
+ACTIVE cannot return to PENDING_CONFIRMATION.
+
+No reopening endpoint exists.
+
+Later repayment states belong to B7/B8+.
+
+### 16. Read authorization
+
+GET /api/v1/commitments
+GET /api/v1/commitments/{id}
+
+are authorized only by direct borrower/lender participation.
+
+A Connection alone never grants financial-history access.
+
+Missing or unrelated Commitment:
+
+404 NOT_FOUND
+message: "Unavailable resource."
+
+Both lender and borrower may read their Commitment regardless of later Connection removal/blocking.
+
+### 17. List behavior
+
+GET /api/v1/commitments
+
+Returns only Commitments where authenticated actor is:
+
+- lender OR
+- borrower
+
+Includes all lifecycle states.
+
+Ordering:
+
+updated_at DESC
+then id as deterministic tie-breaker
+
+No pagination in bounded B5.
+No filtering in bounded B5.
+
+### 18. Commitment response schema
+
+Expose exactly:
+
+- id
+- connection_id
+- type
+- status
+- principal_amount_minor
+- currency
+- description
+- borrower:
+  - id
+  - display_name
+- lender:
+  - id
+  - display_name
+- creator:
+  - id
+  - display_name
+- created_at
+- updated_at
+- confirmed_at
+- activated_at
+
+Do NOT expose:
+
+- phone numbers
+- auth identities
+- session/token data
+- trust data
+- unrelated profile fields
+- unrelated financial history
+
+### 19. Lifecycle actor errors
+
+Error precedence for protected Commitment actions:
+
+1. missing/unrelated resource:
+   404 NOT_FOUND
+
+2. authenticated participant but wrong lifecycle actor:
+   403 FORBIDDEN
+
+3. correct actor but invalid current state:
+   409 INVALID_STATE
+
+Creator attempting to confirm/reject own proposal:
+403 FORBIDDEN
+
+Counterparty attempting proposer-only cancellation:
+403 FORBIDDEN
+
+### 20. Idempotency requirement
+
+Required on every B5 mutation:
+
+- create
+- confirm
+- reject
+- cancel
+
+Header:
+
+Idempotency-Key
+
+Allowed format:
+
+1–128 characters
+
+Allowed characters:
+
+A-Z
+a-z
+0-9
+.
+_
+:
+-
+
+Missing or malformed Idempotency-Key:
+
+400 MALFORMED_REQUEST
+
+Same authenticated actor + same operation/resource + same normalized request + same key:
+
+return original completed logical HTTP status/body
+
+Same scope/key with different normalized request:
+
+409 IDEMPOTENCY_CONFLICT
+
+In-flight duplicate where no completed result is available:
+
+409 CONFLICT
+
+Completed successful financial mutation results are retained for 30 days.
+
+Do not cache:
+
+- schema validation failures
+- authentication failures
+- authorization failures
+
+Replay must re-establish authenticated actor identity and must never expose another user's stored response.
+
+### 21. Request hashing
+
+Hash the validated/normalized logical request together with:
+
+- authenticated actor identity
+- operation identity
+- resource identity where applicable
+
+Normalization occurs after schema validation.
+
+Do not hash secrets or Authorization headers into persisted metadata.
+
+### 22. Concurrency
+
+Lifecycle mutations must use authoritative database state inside the transaction.
+
+Required race behavior:
+
+- double confirm
+- confirm vs reject
+- confirm vs cancel
+- reject vs cancel
+- concurrent same-key request
+
+Exactly one valid lifecycle outcome may commit.
+
+Loser must re-read authoritative state after locking.
+
+No duplicate:
+
+- Commitment
+- TermsVersion
+- ledger event
+- audit entry
+- successful idempotency result
+
+Use documented locking order compatible with B2 user coordination, B3 financial authorization and B4 connection mutation behavior.
+
+### 23. Event catalog
+
+Exact semantic event/action names:
+
+COMMITMENT_PROPOSED
+COMMITMENT_CONFIRMED
+COMMITMENT_REJECTED
+COMMITMENT_CANCELLED
+
+Use the corresponding semantic name for:
+
+- ledger event
+- audit action
+
+COMMITMENT_PROPOSED must NOT imply verified or active debt.
+
+COMMITMENT_CONFIRMED represents confirmation + activation in bounded B5.
+
+No COMMITMENT_ACTIVATED event in B5.
+
+### 24. Atomicity
+
+Every successful B5 mutation must atomically commit all required effects.
+
+Create:
+
+- Commitment
+- initial TermsVersion
+- COMMITMENT_PROPOSED ledger event
+- COMMITMENT_PROPOSED audit log
+- completed idempotency result
+
+Confirm:
+
+- Commitment lifecycle/timestamps
+- COMMITMENT_CONFIRMED ledger event
+- COMMITMENT_CONFIRMED audit log
+- completed idempotency result
+
+Reject:
+
+- Commitment lifecycle
+- COMMITMENT_REJECTED ledger event
+- COMMITMENT_REJECTED audit log
+- completed idempotency result
+
+Cancel:
+
+- Commitment lifecycle
+- COMMITMENT_CANCELLED ledger event
+- COMMITMENT_CANCELLED audit log
+- completed idempotency result
+
+Failure in any required component rolls back the entire mutation.
+
+### 25. Pending proposal expiry
+
+No automatic proposal expiry in MVP.
+
+No abandonment scheduler.
+
+A pending proposal remains PENDING_CONFIRMATION until:
+
+- counterparty confirms
+- counterparty rejects
+- proposer cancels
+
+### 26. B5 error contract
+
+Use existing standard envelope.
+
+Required mappings:
+
+401 AUTH_REQUIRED
+403 FORBIDDEN
+404 NOT_FOUND
+409 INVALID_STATE
+409 CONFLICT
+409 IDEMPOTENCY_CONFLICT
+422 INVALID_AMOUNT
+422 VALIDATION_ERROR
+400 MALFORMED_REQUEST
+
+CURRENCY_MISMATCH remains defined for downstream same-Commitment currency mismatches, especially repayments, but is not normally produced by initial Commitment creation.
+
+Safe generic internal failures remain existing 500/SERVICE_UNAVAILABLE behavior.
+
+### 27. Scope exclusions
+
+B5 must NOT implement:
+
+- repayment reporting
+- repayment verification
+- user-defined interest
+- interest calculations
+- due-date calculations
+- installment generation
+- extension workflow
+- notifications
+- summary APIs
+- FX
+- currency conversion
+- payment movement
+- trust score/profile
+- trust graph
+- AI assistant
+
+### 28. Schema/migration policy
+
+Current audit found no mandatory migration.
+
+B5 should use the existing schema where safe.
+
+If implementation discovers behavior that cannot be safely satisfied without schema change:
+
+STOP
+report the exact limitation
+do NOT create a migration without explicit approval.
