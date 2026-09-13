@@ -950,3 +950,239 @@ B4 does not implement:
 - user/contact discovery
 - unblock workflow
 - payments
+
+## B5-D0 — Approved MVP Currency Contract
+
+- Date: 2026-09-13
+- Status: APPROVED founder/product decision before B5 implementation.
+- Scope: B5+ financial records, calculations, repayments, summaries and clients.
+- Intent: Allow Fides to serve users in India, the US and the UK at MVP launch without introducing foreign-exchange conversion or mixed-currency financial logic.
+
+### 1. Supported MVP currencies
+
+The only currencies enabled for new MVP commitments are:
+
+- INR — Indian Rupee
+- USD — United States Dollar
+- GBP — Pound Sterling
+
+Currency values use uppercase ISO 4217 codes.
+
+Do not accept arbitrary ISO currencies merely because the database field is currency-agnostic.
+
+Additional currencies require a later explicit product decision and tests.
+
+### 2. One currency per commitment
+
+Every Commitment has exactly one explicit currency.
+
+A single commitment must never contain amounts in more than one currency.
+
+Examples:
+
+Valid:
+- INR 10,000 commitment
+- USD 250 commitment
+- GBP 80 commitment
+
+Invalid:
+- principal in USD with installment amounts in GBP
+- repayment in INR against USD commitment
+- combining USD and GBP into one commitment
+
+### 3. Money representation
+
+Persist money using integer minor units.
+
+For the three MVP currencies:
+
+- INR: 100 paise = 1 INR
+- USD: 100 cents = 1 USD
+- GBP: 100 pence = 1 GBP
+
+Do not use floating-point values for authoritative money.
+
+Examples:
+
+- INR 1,250.50 -> 125050 minor units
+- USD 250.00 -> 25000 minor units
+- GBP 80.75 -> 8075 minor units
+
+The backend remains authoritative for monetary calculations.
+
+### 4. Repayment currency
+
+Every repayment must use exactly the same currency as its parent Commitment.
+
+If:
+
+Commitment.currency = USD
+
+then:
+
+Repayment.currency must = USD
+
+Any mismatch must return the approved CURRENCY_MISMATCH behavior.
+
+No repayment may convert between currencies.
+
+### 5. Terms and installments
+
+All monetary fields associated with a Commitment inherit that Commitment's currency.
+
+This includes, where applicable:
+
+- principal
+- installment amounts
+- repayment amounts
+- interest-derived monetary amounts
+- outstanding amounts
+- ledger monetary events
+
+Terms/installments may not introduce a second currency.
+
+### 6. No FX conversion
+
+The MVP performs no:
+
+- foreign-exchange conversion
+- exchange-rate lookup
+- historical FX calculation
+- real-time FX calculation
+- settlement across currencies
+- currency conversion during repayment
+
+Fides records each financial obligation in its original currency.
+
+There is no authoritative exchange-rate service in MVP.
+
+### 7. No cross-currency netting
+
+Commitments in different currencies remain financially independent.
+
+Example:
+
+User owes:
+- INR 10,000
+- USD 200
+
+Fides must NOT calculate:
+
+"Total owed = INR X"
+
+or:
+
+"Total owed = USD Y"
+
+No FX-derived combined balance is authoritative.
+
+### 8. Summary behavior
+
+Where totals contain multiple currencies, results must remain separated by currency.
+
+Conceptually:
+
+borrowed:
+- INR: 1000000 minor
+- USD: 20000 minor
+- GBP: 5000 minor
+
+Do not add unlike currencies together.
+
+Exact B12 API response schemas will be finalized when Summary APIs are implemented.
+
+B5 must not invent the B12 response contract early.
+
+### 9. Net position
+
+Net position is calculated independently per currency.
+
+For example:
+
+INR:
+- lent INR 20,000
+- borrowed INR 5,000
+- net INR +15,000
+
+USD:
+- lent USD 100
+- borrowed USD 300
+- net USD -200
+
+Do not combine INR and USD net positions.
+
+### 10. Client display
+
+Mobile and web may display the appropriate human-facing symbols:
+
+- INR -> ₹
+- USD -> $
+- GBP -> £
+
+The ISO currency code remains authoritative in API/database records.
+
+Clients must not infer financial meaning from the symbol alone.
+
+### 11. International use
+
+Currency support does not alter account identity.
+
+Users may create any supported-currency Commitment regardless of their phone-number country or configured timezone.
+
+Do not infer:
+
+- Indian phone -> INR only
+- US phone -> USD only
+- UK phone -> GBP only
+
+The commitment creator selects an allowed currency under the approved B5 contract.
+
+### 12. No automatic default based on location
+
+Backend financial behavior must not depend on:
+
+- IP geolocation
+- phone country
+- device locale
+- App Store region
+
+A client may later suggest a convenient default for UX, but the selected and confirmed currency is explicit and server-validated.
+
+### 13. Immutability of commitment currency
+
+Once a Commitment is created, its currency must not be changed in place.
+
+Changing currency would represent a different financial obligation.
+
+Do not implement a PATCH-style currency mutation.
+
+If a currency was entered incorrectly, resolution must occur through the approved cancellation/replacement/audit flow defined by commitment lifecycle rules rather than rewriting financial history.
+
+### 14. Future compatibility
+
+The storage architecture remains currency-agnostic.
+
+Future currencies may be added through explicit product/technical decisions.
+
+Future FX support, if ever added, must be a separate derived/conversion layer and must not rewrite original commitment/repayment currency records.
+
+Potential future currencies such as EUR, AED, SGD, CAD, AUD, JPY, etc. are NOT enabled merely by this decision.
+
+### 15. B5 implementation boundary
+
+B5 should:
+
+- allow exactly INR/USD/GBP
+- persist explicit currency
+- validate supported currency
+- preserve currency on commitment
+- reject unsupported currency
+- prepare downstream financial records to inherit the commitment currency
+
+B5 should NOT:
+
+- implement FX
+- implement currency conversion
+- aggregate different currencies
+- implement B12 summary schemas
+- add location-based currency assumptions
