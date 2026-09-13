@@ -93,7 +93,7 @@ def test_seven_endpoint_openapi_and_closed_account_models():
     operations = {
         (method.upper(), path)
         for path, item in schema["paths"].items()
-        if path.startswith("/api/v1/")
+        if path.startswith("/api/v1/") and not path.startswith("/api/v1/connections")
         for method in item
     }
     assert operations == set(PROTECTED) | {

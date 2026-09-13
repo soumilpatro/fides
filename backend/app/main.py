@@ -19,6 +19,7 @@ from fastapi import FastAPI
 
 from app.api.auth import initialize_auth
 from app.api.auth import router as auth_router
+from app.api.connections import router as connections_router
 from app.api.health import router as health_router
 from app.api.me import router as me_router
 from app.config import get_settings
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(me_router)
+    app.include_router(connections_router)
 
     return app
 

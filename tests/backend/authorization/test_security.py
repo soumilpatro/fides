@@ -91,12 +91,12 @@ def test_http_b2_principal_is_only_authority_and_ordinary_auth_is_required(graph
     assert response.status_code == 200 and response.json()["role"] == "borrower"
 
 
-def test_no_domain_endpoints_added_to_production():
+def test_b2_surface_unchanged_with_b4_connections():
     schema = create_app().openapi()
     operations = {
         (method, path)
         for path, item in schema["paths"].items()
-        if path.startswith("/api/v1/")
+        if path.startswith("/api/v1/") and not path.startswith("/api/v1/connections")
         for method in item
     }
     assert operations == {

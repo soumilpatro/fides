@@ -14,7 +14,7 @@ from .test_api import BASE, error, request, signup, verify
 
 def test_openapi_closed_variants_errors_and_bearer():
     schema = create_app().openapi()
-    assert set(schema["paths"]) == {
+    assert {path for path in schema["paths"] if not path.startswith("/api/v1/connections")} == {
         "/health",
         "/readiness",
         "/api/v1/me",

@@ -100,7 +100,7 @@ class RequestCorrelationMiddleware(BaseHTTPMiddleware):
         finally:
             _request_id_ctx.reset(token)
         response.headers[_REQUEST_ID_HEADER] = request_id
-        if request.url.path.startswith(("/api/v1/auth/", "/api/v1/me")):
+        if request.url.path.startswith(("/api/v1/auth/", "/api/v1/me", "/api/v1/connections")):
             response.headers["Cache-Control"] = "no-store"
         return response
 

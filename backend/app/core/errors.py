@@ -85,6 +85,19 @@ class AuthError(Exception):
         super().__init__(code)
 
 
+class ConnectionError(Exception):
+    """B4-D0 uses existing stable domain codes; no auth catalog changes."""
+
+    def __init__(self, code: str):
+        self.status_code, self.message = {
+            "FORBIDDEN": (403, "Forbidden."),
+            "INVALID_STATE": (409, "Invalid state."),
+            "CONFLICT": (409, "Conflict."),
+        }[code]
+        self.code = code
+        super().__init__(code)
+
+
 class ResourceUnavailable(Exception):
     """Tech Spec v1.1 NOT_FOUND / API Spec v1.0 unavailable-resource contract."""
 
@@ -103,7 +116,7 @@ def _response_headers(
     request: Request, headers: Mapping[str, str] | None = None, *, auth: bool = False
 ) -> dict[str, str]:
     result = MutableHeaders(headers=headers)
-    if auth or _is_auth_request(request):
+    if auth or _is_auth_request(request) or request.url.path.startswith("/api/v1/connections"):
         result["Cache-Control"] = "no-store"
     # State survives middleware ContextVar reset, including unhandled 500s.
     request_id = getattr(request.state, "request_id", None)
@@ -120,6 +133,14 @@ def _error_envelope(code: str, message: str) -> dict:
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Register generic, safe exception handlers on the FastAPI app."""
+
+    @app.exception_handler(ConnectionError)
+    async def connection_exception_handler(request: Request, exc: ConnectionError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=_error_envelope(exc.code, exc.message),
+            headers=_response_headers(request),
+        )
 
     @app.exception_handler(ResourceUnavailable)
     async def resource_unavailable_handler(
@@ -172,6 +193,9 @@ def register_exception_handlers(app: FastAPI) -> None:
                 code = "MALFORMED_REQUEST"
             elif types == {"invalid_phone"}:
                 code = "INVALID_PHONE"
+        if request.url.path.startswith("/api/v1/connections"):
+            if any(error["type"] == "json_invalid" for error in exc.errors()):
+                code = "MALFORMED_REQUEST"
         status_code, message = AUTH_ERRORS[code]
         return JSONResponse(
             status_code=status_code,

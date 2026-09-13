@@ -277,7 +277,11 @@ def test_logout_response_requires_boolean_true(value):
 def test_only_approved_b2_routes_are_registered():
     from app.main import create_app
 
-    assert set(create_app().openapi()["paths"]) == {
+    assert {
+        path
+        for path in create_app().openapi()["paths"]
+        if not path.startswith("/api/v1/connections")
+    } == {
         "/health",
         "/readiness",
         "/api/v1/auth/otp/request",
