@@ -1809,3 +1809,621 @@ If implementation discovers behavior that cannot be safely satisfied without sch
 STOP
 report the exact limitation
 do NOT create a migration without explicit approval.
+
+## B6-D0 — Terms, Interest & Installment Contract
+
+Date: 2026-09-13
+Status: APPROVED founder/product decision
+Scope: B6 Terms & Installments
+
+### 1. Terms entry point
+
+Extend the existing:
+
+POST /api/v1/commitments
+
+with one optional closed `terms` object.
+
+Existing B5 fields remain unchanged.
+
+Optional terms object:
+
+{
+  "due_date": "YYYY-MM-DD" | null,
+  "interest_type": "NONE" | "SIMPLE_FIXED",
+  "interest_rate_bps": integer | null,
+  "grace_period_days": integer,
+  "installment_dates": ["YYYY-MM-DD", ...] | null
+}
+
+If `terms` is omitted, preserve B5 behavior:
+
+- no interest
+- no due date
+- no installments
+- grace period 0
+
+Existing B5-created commitments must not be silently modified.
+
+### 2. No B6 terms-edit endpoint
+
+B6 introduces no independent:
+
+- POST terms
+- PATCH terms
+- PUT terms
+
+Initial terms are part of Commitment creation.
+
+Once created, the initial TermsVersion is immutable.
+
+Before confirmation, correcting incorrect terms requires:
+
+cancel proposal -> create corrected proposal
+
+ACTIVE term amendments are not implemented in B6.
+
+Negotiated due-date changes belong to B10 Extensions and must create a new TermsVersion rather than overwrite history.
+
+### 3. Interest modes
+
+Allowed publicly in B6:
+
+- NONE
+- SIMPLE_FIXED
+
+SIMPLE_FIXED means:
+
+A flat fixed percentage of the original Commitment principal for the entire obligation.
+
+It is NOT:
+
+- annualized
+- daily accruing
+- monthly accruing
+- declining-balance interest
+- compound interest
+- penalty interest
+- interest-on-interest
+
+### 4. Interest rate representation
+
+Field:
+
+interest_rate_bps
+
+Meaning:
+
+100 basis points = 1.00%
+
+Examples:
+
+500 = 5.00%
+1250 = 12.50%
+
+Rules:
+
+If interest_type = NONE:
+- interest_rate_bps must be null
+
+If interest_type = SIMPLE_FIXED:
+- interest_rate_bps required
+- true integer only
+- minimum 1
+- maximum 10000
+
+Maximum public fixed interest = 100.00%.
+
+### 5. Interest calculation
+
+All calculations use integer arithmetic.
+
+Let:
+
+P = principal_amount_minor
+R = interest_rate_bps
+
+For NONE:
+
+interest_minor = 0
+
+For SIMPLE_FIXED:
+
+interest_minor = round_half_up(P * R / 10000)
+
+Implement deterministically using integer arithmetic:
+
+interest_minor = (P * R + 5000) // 10000
+
+Do not use floating-point authoritative money.
+
+Total obligation:
+
+total_obligation_minor =
+principal_amount_minor + interest_minor
+
+### 6. Schedule modes
+
+Exactly three B6 arrangements exist.
+
+A. No deadline
+
+due_date = null
+installment_dates = null
+
+No installment rows.
+
+B. Single due date
+
+due_date = YYYY-MM-DD
+installment_dates = null
+
+No installment rows.
+
+C. Installment schedule
+
+due_date = null
+installment_dates = [date1, date2, ...]
+
+Installment rows are generated.
+
+Do not allow both due_date and installment_dates simultaneously.
+
+### 7. Installment schedule validation
+
+For installment schedules:
+
+- minimum 2 installments
+- maximum 60 installments
+- dates explicitly supplied by client
+- dates strictly increasing
+- duplicate dates prohibited
+- no automatic weekly/monthly frequency generator in B6
+- no custom installment amounts in B6
+
+B6 generates amounts server-side.
+
+### 8. Equal-principal allocation
+
+Let:
+
+P = principal
+N = installment count
+
+q = P // N
+
+For installments 1 through N-1:
+
+principal_amount_minor = q
+
+Final installment:
+
+principal_amount_minor =
+P - q * (N - 1)
+
+Remainder goes to final installment.
+
+Require every installment total_due_minor > 0.
+
+### 9. Interest allocation across installments
+
+If total interest I > 0:
+
+iq = I // N
+
+For installments 1 through N-1:
+
+interest_amount_minor = iq
+
+Final installment:
+
+interest_amount_minor =
+I - iq * (N - 1)
+
+For each installment:
+
+total_due_minor =
+principal_amount_minor + interest_amount_minor
+
+Required reconciliation:
+
+sum(installment principal) = Commitment principal
+
+sum(installment interest) = authoritative total interest
+
+sum(installment total) = authoritative total obligation
+
+No minor units may be lost.
+
+### 10. Currency
+
+Terms/installments inherit Commitment currency.
+
+Exactly the B5-D0 approved currencies remain:
+
+- INR
+- USD
+- GBP
+
+No second currency in terms or installments.
+
+No FX.
+
+### 11. Contractual timezone
+
+The contractual due-date timezone is:
+
+the borrower's configured timezone at Commitment creation.
+
+Snapshot this value into the TermsVersion schedule metadata.
+
+Later profile timezone changes must NOT change an existing contractual deadline.
+
+One TermsVersion has one contractual timezone.
+
+All installment deadlines in that version use the same timezone.
+
+### 12. End-of-day semantics
+
+A due date remains valid through the end of that local calendar date.
+
+Server boundary semantics:
+
+the obligation becomes past-due at the start of the following calendar day in the contractual timezone.
+
+Do not implement the deadline as a fabricated 23:59:59.999999 timestamp.
+
+Timezone/DST handling must use proper calendar/timezone semantics.
+
+### 13. Past/today/future dates
+
+Allow:
+
+- past due dates
+- today's date
+- future due dates
+
+This supports recording existing IOUs/loans that may already be overdue.
+
+B6 does NOT automatically implement OVERDUE or DEFAULTED lifecycle behavior.
+
+Those classifications belong to later approved logic.
+
+### 14. Grace period
+
+Field:
+
+grace_period_days
+
+Rules:
+
+- true integer
+- default 0
+- minimum 0
+- maximum 365
+
+Meaning:
+
+Grace period does NOT:
+
+- alter the contractual due date
+- alter interest
+- rewrite terms
+
+It only delays the point at which later overdue logic considers the obligation/installment overdue.
+
+Example:
+
+due_date = 2026-10-10
+grace_period_days = 3
+
+Contractual due date remains 2026-10-10.
+
+Overdue eligibility begins after the end of 2026-10-13 in the contractual timezone.
+
+B6 stores/defines this rule.
+Later notifications/summaries consume it.
+
+### 15. TermsVersion authority
+
+TermsVersion rows are immutable.
+
+Authoritative current terms are:
+
+the highest version_no with effective_at <= evaluation time.
+
+B6 itself creates only version 1 at Commitment creation.
+
+No future-effective TermsVersion creation in bounded B6.
+
+No current_terms_id column is required.
+
+B10 may later create version 2+ after approved extension behavior.
+
+### 16. B6 read API
+
+Exactly:
+
+GET /api/v1/commitments/{id}/terms
+
+GET /api/v1/commitments/{id}/installments
+
+No additional public B6 write route.
+
+### 17. Terms response
+
+GET /api/v1/commitments/{id}/terms returns a closed object containing:
+
+- commitment_id
+- currency
+- current_terms_version_id
+- versions
+
+Versions ordered:
+
+version_no ASC
+
+Each version exposes:
+
+- id
+- version_no
+- effective_at
+- due_date
+- interest_type
+- interest_rate_bps
+- grace_period_days
+- schedule_mode
+- due_timezone
+- installment_dates
+- created_by:
+  - id
+  - display_name
+- created_at
+
+Do NOT expose raw internal schedule_definition JSON.
+
+### 18. Installment response
+
+GET /api/v1/commitments/{id}/installments
+
+Returns installments for the current TermsVersion only.
+
+Order:
+
+sequence_no ASC
+
+Each installment exposes:
+
+- id
+- terms_version_id
+- sequence_no
+- due_date
+- principal_amount_minor
+- interest_amount_minor
+- total_due_minor
+- currency
+- status
+- created_at
+- updated_at
+
+No phone/auth/session/trust/unrelated profile data.
+
+### 19. Authorization
+
+Authorize B6 reads through the parent Commitment.
+
+Only direct borrower/lender participants may read terms/installments.
+
+Connection membership alone grants no access.
+
+Later Connection BLOCKED/REMOVED state does not revoke financial read access.
+
+Missing/unrelated Commitment:
+
+404 NOT_FOUND
+"Unavailable resource."
+
+### 20. Creation atomicity
+
+When terms are supplied during Commitment creation, the existing B5 mutation atomically creates:
+
+- Commitment
+- initial TermsVersion
+- installments if schedule exists
+- COMMITMENT_PROPOSED ledger event
+- COMMITMENT_PROPOSED audit event
+- completed idempotency result
+
+The ledger proposal event references the TermsVersion.
+
+Failure in any required effect rolls back the entire Commitment creation.
+
+### 21. Idempotency
+
+No separate B6 idempotency endpoint exists.
+
+The existing B5 POST /commitments idempotency policy remains authoritative.
+
+The validated/normalized terms object becomes part of the create request hash.
+
+Same key + same normalized complete request:
+replay original logical result
+
+Same scoped key + changed terms:
+IDEMPOTENCY_CONFLICT
+
+### 22. B10 boundary
+
+B6 does NOT implement:
+
+- extensions
+- renegotiation
+- replacement of active schedules
+- arbitrary term amendments
+- version 2+ writes after activation
+
+These belong to B10 or later approved workflows.
+
+### 23. Explicit B6 exclusions
+
+Do NOT implement:
+
+- repayments
+- repayment verification
+- FX
+- currency conversion
+- payment movement
+- automatic frequency schedule generation
+- custom installment amounts
+- compound interest
+- declining-balance interest
+- annualized/time-accruing interest
+- penalty interest
+- extension workflow
+- overdue/default state transitions
+- notifications
+- summaries
+- trust features
+- AI
+
+### 24. Migration rule
+
+The B6 audit did not establish a mandatory migration for this bounded contract.
+
+Use existing schema where safe.
+
+If implementation cannot safely satisfy this approved contract without schema change:
+
+STOP
+report exact limitation
+do NOT create a migration without approval.
+
+## FUTURE-FIN-D0 — Mutual Settlement / Waiver Requirement
+
+Date: 2026-09-13
+Status: APPROVED founder/product requirement; exact implementation contract DEFERRED to B7–B9 design
+Scope: Future MVP repayment/outstanding/closure behavior
+
+### 1. Product requirement
+
+Fides MVP must support mutually agreed closure of an active financial Commitment even when verified outstanding is greater than zero.
+
+This represents a voluntary agreement between borrower and lender to settle/forgive/waive the unpaid remainder.
+
+### 2. Mutual consent mandatory
+
+Neither party may unilaterally erase or waive the remaining obligation through this feature.
+
+One financial participant proposes the settlement.
+
+The other financial participant must explicitly approve it.
+
+Until both sides agree, authoritative outstanding remains unchanged.
+
+### 3. Never fake repayment
+
+A waived/forgiven amount must NEVER be represented as:
+
+- a repayment
+- a verified repayment
+- money transferred
+- money received
+
+Fides must preserve the distinction between:
+
+repaid amount
+
+and:
+
+waived/settled amount
+
+### 4. Financial history preservation
+
+Mutual settlement must NOT rewrite:
+
+- original principal
+- original terms
+- verified repayments
+- repayment verification history
+- previous ledger events
+
+History remains append-only/auditable.
+
+### 5. Required settlement record
+
+The eventual implementation must persist or otherwise authoritatively record at minimum:
+
+- Commitment
+- proposer
+- approving counterparty
+- verified outstanding immediately before settlement
+- amount waived/settled
+- timestamps
+- resulting closure
+- ledger/audit history
+
+Exact schema/API representation is intentionally NOT approved yet.
+
+### 6. Closure result
+
+After both parties approve a valid mutual settlement:
+
+- remaining approved unpaid obligation is considered waived/settled by agreement
+- Commitment may transition to CLOSED
+- no fake repayment is generated
+- historical outstanding/repaid/waived values remain distinguishable
+
+### 7. Fully repaid versus mutually settled
+
+Fides must preserve the semantic distinction between:
+
+A. fully repaid commitment
+
+and
+
+B. commitment closed with some amount waived/forgiven
+
+Future Trust Profile / behavioral analytics must be capable of distinguishing these outcomes.
+
+Do not treat mutually settled as identical to fully repaid.
+
+### 8. Relationship to previous zero-outstanding rule
+
+Existing specifications currently state that normal settlement/closure occurs only when authoritative verified obligation reaches zero.
+
+FUTURE-FIN-D0 introduces an explicit approved exception:
+
+A Commitment may also close with non-zero verified outstanding ONLY through the future mutually approved settlement/waiver workflow.
+
+Normal automatic/full-repayment closure still requires zero outstanding.
+
+### 9. Lifecycle direction
+
+Conceptually the future flow may include:
+
+ACTIVE / PARTIALLY_REPAID
+-> settlement proposed
+-> counterparty approval
+-> CLOSED
+
+The exact persisted state model, including whether a dedicated SETTLEMENT_PENDING state is needed, is NOT approved yet.
+
+Do not add states or migrations now.
+
+### 10. Implementation timing
+
+Do NOT implement this in B6.
+
+Before B7/B8/B9 closure/outstanding implementation is finalized:
+
+- audit current schema
+- define exact API
+- define settlement proposal/approval roles
+- define idempotency
+- define concurrency behavior
+- define ledger/audit events
+- define cancellation/rejection of settlement request
+- define effect on outstanding calculation
+- determine whether schema migration is necessary
+
+No implementation agent may silently invent these rules.
