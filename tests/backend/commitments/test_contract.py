@@ -128,7 +128,7 @@ def test_exact_openapi():
         if p.startswith(BASE)
         for m in item
     }
-    assert operations == set(ROUTES)
+    assert operations == set(ROUTES) | {("GET", "/{id}/terms"), ("GET", "/{id}/installments")}
     models = schema["components"]["schemas"]
     request = models["CommitmentRequest"]
     assert request["additionalProperties"] is False
@@ -139,6 +139,7 @@ def test_exact_openapi():
         "principal_amount_minor",
         "currency",
         "description",
+        "terms",
     }
     assert request["properties"]["currency"]["enum"] == ["INR", "USD", "GBP"]
     for method, path in ROUTES:

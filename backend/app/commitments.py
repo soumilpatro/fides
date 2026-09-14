@@ -20,12 +20,12 @@ from app.core.logging import sanitize_request_id
 from app.idempotency import Idempotency
 from app.models.audit_log import AuditLog
 from app.models.commitment import Commitment
-from app.models.commitment_terms_version import CommitmentTermsVersion
 from app.models.connection import Connection
 from app.models.enums import CommitmentStatus as State
 from app.models.enums import CommitmentType, ConnectionStatus, UserStatus
 from app.models.ledger_event import LedgerEvent
 from app.models.user import User
+from app.terms import create_terms
 
 
 class CommitmentService:
@@ -141,26 +141,17 @@ class CommitmentService:
             )
             db.add(row)
             db.flush()
-            terms = CommitmentTermsVersion(
-                commitment_id=row.id,
-                version_no=1,
-                effective_at=now,
-                interest_type="NONE",
-                interest_rate_bps=None,
-                due_date=None,
-                schedule_definition=None,
-                grace_period_days=0,
-                created_by_user_id=principal.user_id,
-                created_at=now,
-            )
-            db.add(terms)
-            db.flush()
+            terms = create_terms(db, row, body.terms, now)
             self._events(
                 db, row, principal.user_id, "COMMITMENT_PROPOSED", now, request_id, terms.id
             )
             return 201, self._response(db, row)
 
-        return self._execute(principal, "create", None, key, body.model_dump(mode="json"), perform)
+        payload = body.model_dump(mode="json")
+        if body.terms is None:
+            # Keep pre-B6 stored hashes replayable; explicit terms include a snapshot.
+            payload.pop("terms")
+        return self._execute(principal, "create", None, key, payload, perform)
 
     @auth_operation
     def mutate(self, principal, identifier, action, key, *, request_id=None):

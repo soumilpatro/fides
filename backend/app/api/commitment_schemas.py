@@ -1,4 +1,4 @@
-"""Approved B5-D0/D1 wire shapes; no B6 inputs."""
+"""Approved B5-D0/D1 wire shapes with B6-D0 optional initial terms."""
 
 from typing import Annotated, Literal
 from uuid import UUID
@@ -7,10 +7,13 @@ from pydantic import Field, StrictInt, StrictStr, field_validator
 
 from app.api.auth_schemas import AuthSchema, UtcDatetime
 from app.api.connection_schemas import ParticipantResponse
+from app.api.term_schemas import TermsRequest
 from app.models.enums import CommitmentStatus
 
 
 class CommitmentRequest(AuthSchema):
+    # Omission is the legacy B5 path. Explicit null is not a terms object.
+    terms: TermsRequest = Field(default=None)
     connection_id: UUID
     actor_role: Literal["BORROWER", "LENDER"]
     type: Literal["IOU", "PEER_LOAN"]
