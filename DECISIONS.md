@@ -2427,3 +2427,578 @@ Before B7/B8/B9 closure/outstanding implementation is finalized:
 - determine whether schema migration is necessary
 
 No implementation agent may silently invent these rules.
+
+
+## B7-D0 — Repayment Reporting Contract
+
+Date: 2026-09-15
+Status: APPROVED founder/product decision
+Scope: B7 Repayment Reporting
+
+### 1. Public B7 routes
+
+Implement exactly:
+
+POST /api/v1/commitments/{id}/repayments
+GET  /api/v1/commitments/{id}/repayments
+GET  /api/v1/repayments/{id}
+
+No B8 verify/dispute routes are implemented in B7.
+
+### 2. Reporter permissions
+
+Either direct financial participant may report a repayment:
+
+- borrower may report “I paid”
+- lender may report “I received”
+
+The other participant becomes the required future B8 verifier.
+
+Unrelated users:
+404 NOT_FOUND
+
+Connection membership alone grants no repayment access.
+
+### 3. Eligible commitment states
+
+Repayment reporting is allowed only when Commitment status is:
+
+- ACTIVE
+- PARTIALLY_REPAID
+
+Reject reporting in every other state, including:
+
+- PENDING_CONFIRMATION
+- REJECTED
+- CANCELLED
+- FULLY_REPAID
+- CLOSED
+- DISPUTED
+- DEFAULTED
+
+with:
+
+409 INVALID_STATE
+
+B7 does not itself create PARTIALLY_REPAID or FULLY_REPAID transitions.
+
+### 4. Connection-state independence
+
+Once an active Commitment exists, repayment reporting does not depend on the current Connection state.
+
+BLOCKED or REMOVED connection does not revoke financial reporting access for existing commitments.
+
+Current authenticated account eligibility still applies.
+
+### 5. Repayment create request
+
+Closed schema:
+
+{
+  "amount_minor": integer,
+  "currency": "INR" | "USD" | "GBP",
+  "payment_date": "YYYY-MM-DD",
+  "note": string | null
+}
+
+No client-supplied:
+
+- commitment_id in body
+- reporter ID
+- repayment status
+- verification state
+- balance/outstanding
+- installment ID
+- terms version ID
+- verifier ID
+
+### 6. Amount validation
+
+amount_minor:
+
+- required
+- true JSON integer
+- booleans rejected
+- floats rejected
+- numeric strings rejected
+- must be > 0
+- must not exceed transactionally computed reportable_remaining
+
+Invalid type/range:
+422 INVALID_AMOUNT
+
+Over-capacity:
+409 OVER_REPAYMENT
+
+### 7. Currency
+
+currency is required explicitly.
+
+Allowed:
+- INR
+- USD
+- GBP
+
+Must exactly equal parent Commitment currency.
+
+No lowercase normalization.
+
+Mismatch:
+422 CURRENCY_MISMATCH
+
+No FX.
+
+### 8. Payment date
+
+payment_date is required DATE semantics.
+
+Allow:
+- past dates
+- today
+
+Reject:
+- future dates
+
+“Today” is evaluated using the reporting user’s configured timezone at submission time.
+
+Persist the exact supplied calendar date.
+
+Do not timezone-convert the stored payment_date.
+
+Malformed date:
+422 VALIDATION_ERROR
+
+### 9. Note
+
+note:
+
+- optional
+- nullable
+- string only
+- trim surrounding whitespace
+- blank -> null
+- max 500 characters
+
+No structured payment method/reference/evidence fields in bounded B7.
+
+Do not overload note as a hidden structured storage format.
+
+TD-005 / cash evidence remains deferred.
+
+### 10. Initial repayment status
+
+Every successfully reported repayment starts as:
+
+PENDING_VERIFICATION
+
+Always.
+
+B7 never auto-verifies a repayment.
+
+### 11. Reported != verified
+
+PENDING_VERIFICATION repayments:
+
+- remain auditable
+- do not reduce verified outstanding
+- do not change Commitment repayment status
+- do not imply money has been verified
+
+DISPUTED and CANCELLED repayments likewise do not count as verified repayment.
+
+### 12. Authoritative obligation
+
+At transaction evaluation time:
+
+P = original Commitment principal
+
+T = highest TermsVersion with:
+effective_at <= evaluation time
+
+For NONE:
+
+I = 0
+
+For SIMPLE_FIXED:
+
+I = (P * interest_rate_bps + 5000) // 10000
+
+Authoritative obligation:
+
+O = P + I
+
+Use current effective B6 terms.
+
+Do not add installment totals to O because installments represent allocation of the same obligation.
+
+Grace period does not change O.
+
+### 13. Verified outstanding
+
+V =
+sum(amount_minor)
+for repayment rows of the Commitment
+whose current status is VERIFIED
+
+verified_outstanding = O - V
+
+Pending, disputed, and cancelled repayments do not reduce verified_outstanding.
+
+If persisted data produces impossible corruption such as V > O:
+fail safely rather than silently clamp.
+
+### 14. Prepayment
+
+Allow repayment reporting against the full remaining obligation even if scheduled installment dates are in the future.
+
+No installment-maturity cap.
+
+No early-payment interest rebate.
+
+No interest recalculation for early payment in MVP.
+
+### 15. No installment allocation in B7
+
+Repayments are commitment-level records only.
+
+B7 does NOT:
+
+- allocate repayment to installments
+- add repayment-to-installment foreign keys
+- update installment statuses
+- implement payment waterfalls
+- auto-match reported amounts to installments
+
+Do not create a migration for installment allocation.
+
+### 16. Pending reporting-capacity reservation
+
+Pending repayment reports reserve reporting capacity without reducing verified outstanding.
+
+Define:
+
+O = authoritative total obligation
+
+V =
+sum VERIFIED repayments
+
+Q =
+sum PENDING_VERIFICATION repayments
+
+reportable_remaining =
+O - V - Q
+
+Accept a new report only when:
+
+0 < amount_minor <= reportable_remaining
+
+This means pending reports may collectively equal, but never exceed, current verified outstanding.
+
+A pending report does NOT become verified merely because it reserves capacity.
+
+### 17. Pending full-balance report behavior
+
+If a PENDING_VERIFICATION report reserves all remaining capacity:
+
+new repayment reports are rejected with OVER_REPAYMENT until capacity is released by a later approved workflow.
+
+B7 does not invent:
+
+- pending expiry
+- repayment cancellation
+- automatic verification
+- automatic capacity release
+
+Those belong to later approved behavior.
+
+### 18. Commitment lifecycle on report
+
+Reporting a repayment does NOT change Commitment status.
+
+B7 does not transition to:
+
+- PARTIALLY_REPAID
+- FULLY_REPAID
+- CLOSED
+
+Those transitions depend on later verification/outstanding behavior.
+
+### 19. FUTURE-FIN-D0 boundary
+
+Do NOT implement mutual settlement/waiver in B7.
+
+No:
+- settlement table
+- settlement state
+- settlement endpoint
+- waived amount field
+- fake repayment for waived value
+
+Future waived amount must remain distinct from repaid amount.
+
+Do not introduce an invariant that CLOSED always means fully repaid.
+
+### 20. Repayment response
+
+Exact closed response fields:
+
+- id
+- commitment_id
+- reported_by:
+  - id
+  - display_name
+- amount_minor
+- currency
+- payment_date
+- reported_at
+- status
+- note
+- created_at
+
+Do not expose:
+
+- phone
+- auth/session data
+- idempotency internals
+- verification internals
+- raw outstanding
+- unrelated profile information
+
+### 21. Repayment list
+
+GET /api/v1/commitments/{id}/repayments
+
+Return all repayment statuses visible to the direct participants.
+
+Order:
+
+reported_at DESC
+then id ASC
+
+No filtering in B7.
+No pagination in B7.
+No repayments -> [].
+
+### 22. Individual repayment read
+
+GET /api/v1/repayments/{id}
+
+Only direct participants of the parent Commitment may access it.
+
+Missing/unrelated:
+404 NOT_FOUND
+"Unavailable resource."
+
+Access survives Connection BLOCKED/REMOVED state.
+
+### 23. Ledger event
+
+Successful report appends:
+
+REPAYMENT_REPORTED
+
+Ledger event includes at minimum:
+
+- commitment_id
+- repayment_id
+- reporter actor
+- amount
+- currency
+- current terms_version reference
+- occurrence time
+- repayment status / explicit unverified semantics
+
+The event must never imply verification.
+
+### 24. Audit action
+
+Use exact action name:
+
+REPAYMENT_REPORTED
+
+Audit records:
+
+- repayment object
+- actor
+- result
+- timestamp
+- sanitized request correlation metadata
+
+Do not store note/free-text evidence in audit/log metadata.
+
+### 25. Atomicity
+
+Successful POST repayment commits atomically:
+
+- Repayment
+- REPAYMENT_REPORTED ledger event
+- REPAYMENT_REPORTED audit event
+- completed idempotency result
+
+Failure in any required step rolls back all effects.
+
+No orphan repayment/event/audit/idempotency result.
+
+### 26. Idempotency
+
+POST repayment requires Idempotency-Key.
+
+Reuse the approved B5 financial-write contract:
+
+Format:
+1–128 chars
+
+Allowed chars:
+A-Z
+a-z
+0-9
+.
+_
+:
+-
+
+Missing/malformed:
+400 MALFORMED_REQUEST
+
+Same actor + operation/resource + normalized request + key:
+return original completed status/body
+
+Same scope/key + changed normalized request:
+409 IDEMPOTENCY_CONFLICT
+
+Concurrent in-flight same-key request:
+409 CONFLICT
+
+Successful results retained for 30 days.
+
+Do not cache schema/auth/authz failures.
+
+Replay must reauthenticate and reauthorize the protected parent resource.
+
+Replay returns the original completed logical response and does not re-run current capacity/state checks.
+
+### 27. Repayment idempotency FK policy
+
+For bounded B7:
+
+leave repayments.idempotency_key_id NULL / unused.
+
+Reason:
+the current idempotency row may be expired/reused under existing retention behavior, so a durable FK could later misrepresent original causality.
+
+The idempotency result itself remains authoritative for replay.
+
+Do not create a migration or retention redesign in B7.
+
+### 28. Actor/error precedence
+
+After authentication and schema validation:
+
+1. missing/unrelated resource
+   -> 404 NOT_FOUND
+
+2. participant lacking approved action permission
+   -> 403 FORBIDDEN
+
+3. wrong Commitment state
+   -> 409 INVALID_STATE
+
+4. currency mismatch
+   -> 422 CURRENCY_MISMATCH
+
+5. invalid financial amount
+   -> 422 INVALID_AMOUNT where applicable
+
+6. amount exceeds reportable capacity
+   -> 409 OVER_REPAYMENT
+
+Preserve existing safe generic internal errors.
+
+### 29. Public errors
+
+At minimum:
+
+401 AUTH_REQUIRED
+403 FORBIDDEN
+404 NOT_FOUND
+409 INVALID_STATE
+409 OVER_REPAYMENT
+409 CONFLICT
+409 IDEMPOTENCY_CONFLICT
+422 CURRENCY_MISMATCH
+422 INVALID_AMOUNT
+422 VALIDATION_ERROR
+400 MALFORMED_REQUEST
+
+### 30. Concurrency and locking
+
+Preserve existing lock ordering.
+
+For mutation:
+
+1. validate/normalize request and key
+2. acquire scoped idempotency advisory lock
+3. acquire affected User locks in UUID order
+4. revalidate account/session eligibility
+5. authorize and lock parent Commitment
+6. re-read current Commitment state
+7. read authoritative current TermsVersion
+8. compute VERIFIED aggregate
+9. compute PENDING_VERIFICATION aggregate
+10. validate currency and reportable_remaining
+11. insert repayment
+12. append ledger
+13. append audit
+14. persist completed idempotency result
+15. commit
+
+Do not perform external network calls inside the transaction.
+
+Different-key concurrent repayment reports must serialize through the Commitment lock so their aggregate pending capacity cannot exceed the approved obligation.
+
+### 31. Account/state races
+
+After waiting for locks:
+
+current database state wins.
+
+Tests must cover:
+
+- reporter account deactivation
+- counterparty/account eligibility where required by current financial invariants
+- Commitment state change
+- same-key concurrent requests
+- different-key competing reports
+
+Do not rely on stale pre-lock state.
+
+### 32. No migration rule
+
+The bounded B7 contract requires no migration.
+
+If implementation discovers that the approved contract cannot safely be satisfied without a schema change:
+
+STOP.
+Report the exact blocker.
+Do not create a migration without approval.
+
+### 33. Explicit B7 exclusions
+
+Do NOT implement:
+
+- repayment verification
+- repayment dispute decisions
+- verification history APIs
+- repayment cancellation endpoint
+- automatic pending expiry
+- settlement/waiver
+- extension workflow
+- notification delivery
+- summary endpoints
+- installment allocation
+- structured method/reference/evidence
+- payment movement
+- FX
+- overdue/default transitions
+- trust features
+- AI
