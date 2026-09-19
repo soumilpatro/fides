@@ -3002,3 +3002,651 @@ Do NOT implement:
 - overdue/default transitions
 - trust features
 - AI
+
+
+## B8-D0 — Repayment Verification & Dispute Contract
+
+Date: 2026-09-19
+Status: APPROVED founder/product decision
+Scope: B8 Repayment Verification / Dispute / Verification History
+
+### 1. Public B8 routes
+
+Implement exactly:
+
+POST /api/v1/repayments/{id}/verify
+POST /api/v1/repayments/{id}/dispute
+GET  /api/v1/repayments/{id}/verification-history
+
+No generic decision endpoint.
+No individual verification-detail endpoint.
+
+### 2. Verifier authorization
+
+Only the direct participant who did NOT report the repayment may verify or dispute it.
+
+Therefore:
+
+- borrower reports payment -> lender decides
+- lender reports receipt -> borrower decides
+
+The original reporter can never verify or dispute their own report.
+
+Missing/unrelated protected resource:
+404 NOT_FOUND
+"Unavailable resource."
+
+A direct participant who is not the required decision actor:
+403 FORBIDDEN
+
+Connection BLOCKED/REMOVED does not revoke financial access to an existing commitment.
+
+### 3. Account eligibility
+
+For a normal B8 decision, both commitment participants must remain ACTIVE.
+
+The acting verifier must also satisfy current authentication/session eligibility.
+
+If persisted data violates these financial-account invariants:
+fail safely rather than inventing recovery behavior.
+
+### 4. Whole-report decisions only
+
+No partial verification.
+
+A repayment decision applies to the entire reported amount.
+
+Allowed transitions:
+
+PENDING_VERIFICATION -> VERIFIED
+PENDING_VERIFICATION -> DISPUTED
+
+No partially verified amount is stored or derived.
+
+### 5. One successful decision per repayment
+
+Only PENDING_VERIFICATION may be decided.
+
+Bounded B8 allows exactly one successful decision for the original report.
+
+Do NOT allow:
+
+- DISPUTED -> VERIFIED
+- VERIFIED -> DISPUTED
+- reopen
+- reconsideration
+- reversal
+- decision on CANCELLED repayment
+
+A later correction must use a new auditable report/workflow rather than rewriting the original decision.
+
+### 6. Verification history
+
+Every successful verify/dispute appends exactly one RepaymentVerification row.
+
+B8 history product contract allows one successful decision row per repayment.
+
+Exact history response element:
+
+{
+  "id": "uuid",
+  "repayment_id": "uuid",
+  "decided_by": {
+    "id": "uuid",
+    "display_name": "string"
+  },
+  "decision": "VERIFIED" | "DISPUTED",
+  "decision_note": "string|null",
+  "decided_at": "UTC RFC3339 timestamp"
+}
+
+Both direct participants may read history.
+
+Missing/unrelated repayment:
+404 NOT_FOUND
+
+No history:
+[]
+
+Ordering:
+decided_at ASC
+then id ASC
+
+No pagination.
+No filtering.
+No history update/delete routes.
+
+Do not expose:
+- phone
+- auth/session data
+- idempotency internals
+- unrelated profiles
+- unrelated financial records
+
+Current display_name is a current profile projection, not a historical name snapshot.
+
+### 7. Decision note
+
+Both verify and dispute use the same closed request body:
+
+{
+  "decision_note": "Optional note"
+}
+
+Allow:
+{}
+
+Allow:
+{
+  "decision_note": null
+}
+
+Rules:
+- optional
+- nullable
+- strict string or null
+- trim surrounding whitespace
+- blank -> null
+- maximum 500 characters after trimming
+
+No:
+- structured reason codes
+- evidence uploads
+- payment method/reference
+- client decision timestamp
+- client actor
+- client repayment/commitment IDs
+- client decision/status
+- client balance/outstanding
+- client terms-version reference
+
+Schemas are closed.
+
+### 8. Eligible parent Commitment states
+
+Verify/dispute allowed only when the parent Commitment status is:
+
+- ACTIVE
+- PARTIALLY_REPAID
+
+Every other Commitment state:
+409 INVALID_STATE
+
+### 9. Verification-time authoritative obligation
+
+VERIFY uses the current effective B6 TermsVersion at verification time.
+
+Under the locked parent Commitment:
+
+P = original principal
+
+T =
+highest TermsVersion version_no
+where effective_at <= verification evaluation time
+
+For NONE:
+I = 0
+
+For SIMPLE_FIXED:
+I = (P * interest_rate_bps + 5000) // 10000
+
+O = P + I
+
+V =
+sum amount_minor
+for currently VERIFIED repayments of this Commitment
+
+verified_outstanding =
+O - V
+
+The candidate PENDING_VERIFICATION repayment is not included in V until successful verification.
+
+B7 report-time terms_version provenance does NOT freeze verification-time entitlement.
+
+### 10. Verification amount rule
+
+Before VERIFY succeeds:
+
+repayment.amount_minor <= current verified_outstanding
+
+must hold.
+
+If candidate amount exceeds current verified outstanding:
+409 OVER_REPAYMENT
+
+B7 pending reservation does not remove this verification-time recheck.
+
+Grace period does not change O or verification amount.
+
+### 11. Pending-capacity effects
+
+Let candidate repayment amount = a.
+
+On VERIFY:
+
+V -> V + a
+Q -> Q - a
+
+Verified outstanding decreases by a.
+
+On DISPUTE:
+
+V unchanged
+Q -> Q - a
+
+Verified outstanding remains unchanged.
+Reporting capacity increases by a.
+
+No separate persisted "capacity release" row is required.
+
+These effects are derived from repayment.status.
+
+### 12. Corruption / amended-terms behavior
+
+For VERIFY:
+
+- if V > O -> fail safely
+- if candidate amount > O - V -> 409 OVER_REPAYMENT
+- if repayment/status/history persistence is inconsistent -> fail safely
+
+For DISPUTE:
+
+Do NOT require V + Q <= O.
+
+Do NOT reuse B7 reporting_capacity() as a dispute precondition.
+
+DISPUTE may release the repayment's pending reservation even if later approved/future terms changes or inconsistent pending reservations mean V + Q > O.
+
+Reason:
+DISPUTE does not create verified credit and must not trap an invalid pending reservation.
+
+However, corrupted repayment/status/history association still fails safely.
+
+### 13. Commitment lifecycle on successful VERIFY
+
+After successful verification, derive resulting verified outstanding.
+
+If parent before = ACTIVE
+and resulting verified outstanding > 0:
+-> PARTIALLY_REPAID
+
+If parent before = PARTIALLY_REPAID
+and resulting verified outstanding > 0:
+-> PARTIALLY_REPAID
+
+If parent before = ACTIVE or PARTIALLY_REPAID
+and resulting verified outstanding = 0:
+-> FULLY_REPAID
+
+Single full repayment may transition:
+
+ACTIVE -> FULLY_REPAID
+
+Do not force an intermediate PARTIALLY_REPAID state.
+
+Update Commitment.updated_at when status changes.
+
+DISPUTE does not change Commitment status.
+
+Do not infer Commitment DISPUTED from a disputed repayment.
+
+### 14. FULLY_REPAID is distinct from CLOSED
+
+B8 stops at:
+
+FULLY_REPAID
+
+Do NOT automatically transition to CLOSED.
+
+Leave closed_at unchanged in B8.
+
+Do not establish:
+
+CLOSED == fully repaid
+
+Future mutual settlement may close an obligation with waived amount, and repaid versus waived accounting must remain distinct.
+
+### 15. No installment allocation
+
+B8 remains Commitment-level only.
+
+Do NOT:
+- allocate verified repayment to installments
+- mutate installment statuses
+- implement waterfall logic
+- cap verification by installment maturity
+- infer paid installments
+
+### 16. Mutation response
+
+Both:
+
+POST /verify
+POST /dispute
+
+return:
+
+200
+
+with the exact existing B7 RepaymentResponse:
+
+- id
+- commitment_id
+- reported_by:
+  - id
+  - display_name
+- amount_minor
+- currency
+- payment_date
+- reported_at
+- status
+- note
+- created_at
+
+Do not embed:
+- updated Commitment
+- verified outstanding
+- verification-history record
+- idempotency internals
+- auth/session data
+
+Clients may refetch the authoritative Commitment and verification history.
+
+### 17. Idempotency
+
+VERIFY and DISPUTE are idempotent financial writes.
+
+Require Idempotency-Key.
+
+Reuse approved B5/B7 contract:
+
+Key:
+1–128 chars
+
+Allowed:
+A-Z
+a-z
+0-9
+.
+_
+:
+-
+
+Missing/malformed:
+400 MALFORMED_REQUEST
+
+Scope:
+actor + exact operation/endpoint + repayment resource + key
+
+Same scope + same normalized request:
+return original completed status/body
+
+Same scope/key + changed request:
+409 IDEMPOTENCY_CONFLICT
+
+Concurrent same-scope in-flight:
+409 CONFLICT
+
+Successful results retained 30 days.
+
+Do not cache failed schema/auth/authz/state/financial requests.
+
+Replay:
+- reauthenticate
+- reauthorize protected repayment/action
+- return original completed response
+- do NOT rerun pending-state or financial eligibility checks
+
+VERIFY and DISPUTE may reuse the same textual key because operation scopes differ.
+
+No new verification-idempotency FK.
+
+Do not use Repayment.idempotency_key_id for B8.
+
+Any idempotency helper adaptation must preserve existing B5/B7 endpoint strings, hashes and replay behavior exactly.
+
+### 18. Locking / concurrency
+
+Preserve global lock ordering.
+
+Mutation order:
+
+1. validate/normalize body and key
+2. acquire scoped idempotency advisory lock
+3. discover participant IDs without treating snapshot as authoritative
+4. lock affected Users in UUID order
+5. revalidate current account/session eligibility
+6. authorize and lock parent Commitment
+7. lock Repayment
+8. reread parent association, reporter, actor role and states
+9. validate repayment/history consistency
+10. for VERIFY, select current TermsVersion and calculate authoritative outstanding
+11. append RepaymentVerification row
+12. update Repayment status
+13. update Commitment status if VERIFY requires it
+14. append ledger event
+15. append audit event
+16. persist completed idempotency result
+17. commit
+
+Parent Commitment must be locked before Repayment.
+
+B7 reporting and B8 decisions share the same parent Commitment lock discipline.
+
+Expected races:
+
+verify vs dispute:
+one succeeds; loser rereads and rejects
+
+verify vs verify:
+one financial effect
+
+dispute vs dispute:
+one effect
+
+report vs verify/dispute:
+serialized through parent Commitment lock
+
+future terms amendment vs B8:
+serialized through parent Commitment lock
+
+account deactivation:
+User locks coordinate; current database eligibility wins
+
+Connection block/remove:
+does not revoke financial access and must not introduce Connection-lock dependency
+
+### 19. Ledger events
+
+Approve exact event names:
+
+REPAYMENT_VERIFIED
+REPAYMENT_DISPUTED
+
+REPAYMENT_VERIFIED includes:
+
+- commitment_id
+- repayment_id
+- verifier actor
+- amount
+- currency
+- verification-history ID
+- resulting repayment status
+- verification-time terms_version_id
+- resulting verified outstanding
+- resulting Commitment status
+- occurrence timestamp
+
+REPAYMENT_DISPUTED includes:
+
+- commitment_id
+- repayment_id
+- deciding actor
+- reported amount
+- currency
+- verification-history ID
+- resulting repayment status
+- occurrence timestamp
+
+Do NOT attach a fresh verification-time TermsVersion to DISPUTE because no monetary verification calculation is applied.
+
+Do not store decision-note/evidence text in ledger payload.
+
+Neither event means Fides moved money.
+
+### 20. Audit events
+
+Use exact action names:
+
+REPAYMENT_VERIFIED
+REPAYMENT_DISPUTED
+
+Object:
+
+object_type = Repayment
+object_id = repayment UUID
+
+Include:
+- actor
+- SUCCESS result
+- server timestamp
+- sanitized request correlation metadata
+
+Exclude decision_note/evidence/free text from audit metadata.
+
+### 21. Atomicity
+
+A successful B8 mutation atomically commits all required effects:
+
+- RepaymentVerification row
+- Repayment status
+- Commitment status update if applicable
+- ledger event
+- audit event
+- completed idempotency result
+
+Failure at any required step rolls back all effects.
+
+No orphan or partially applied verification/dispute state.
+
+### 22. Error contract
+
+After authentication/schema validation and protected-resource lookup:
+
+Missing repayment / unrelated user:
+404 NOT_FOUND
+
+Reporter attempts counterparty-only action:
+403 FORBIDDEN
+
+Invalid parent Commitment state:
+409 INVALID_STATE
+
+DISPUTED repayment receives another decision:
+409 INVALID_STATE
+
+CANCELLED repayment receives a decision:
+409 INVALID_STATE
+
+Already VERIFIED repayment receives a new decision:
+409 ALREADY_VERIFIED
+
+VERIFY candidate amount exceeds current eligible verified outstanding:
+409 OVER_REPAYMENT
+
+Invalid decision_note/schema:
+422 VALIDATION_ERROR
+
+Missing/malformed Idempotency-Key or malformed JSON:
+400 MALFORMED_REQUEST
+
+Same key, changed normalized request:
+409 IDEMPOTENCY_CONFLICT
+
+Same-scope operation in flight:
+409 CONFLICT
+
+Corrupt authoritative financial/history state:
+existing safe generic 500/503 behavior
+
+Preserve B7 reporting-specific OVER_REPAYMENT wording.
+
+B8 gets verification-specific OVER_REPAYMENT wording.
+
+Error precedence:
+
+1. unavailable resource
+2. wrong action role
+3. repayment / parent current state
+4. financial verification validation
+
+Do not leak state or amounts to unrelated users.
+
+### 23. No migration / dependency rule
+
+Bounded B8 requires no migration.
+
+Do NOT add:
+
+- uniqueness constraint
+- verification.updated_at
+- current_verification_id
+- version column
+- verification idempotency FK
+- verification terms_version_id
+- new dependency
+
+Single successful decision is enforced transactionally through:
+- parent lock
+- repayment lock
+- PENDING_VERIFICATION state guard
+- atomic history/status update
+
+If implementation discovers that this approved contract cannot safely be satisfied without a migration or dependency change:
+
+STOP.
+Report the exact blocker.
+Do not invent or apply the migration/dependency change.
+
+### 24. History immutability
+
+Verification history is append-only in application behavior.
+
+No B8 update/delete route or service behavior may modify/delete an existing successful RepaymentVerification record.
+
+Database-level immutability hardening may be handled later and is not a B8 migration requirement.
+
+### 25. FUTURE-FIN-D0 compatibility
+
+B8 must preserve:
+
+- verified repayment != waived amount
+- disputed repayment != waived amount
+- CLOSED does not imply fully repaid
+- no fake VERIFIED repayment representing waiver
+- disputed report/history may remain present if a future mutual settlement closes remaining obligation
+- no settlement endpoints/states/tables/fields in B8
+
+### 26. Explicit B8 exclusions
+
+Do NOT implement:
+
+- partial verification
+- reopen/reconsideration
+- reversal
+- repayment cancellation
+- dispute-resolution workflow after DISPUTED
+- structured evidence
+- evidence upload
+- payment method/reference
+- installment allocation
+- automatic CLOSED
+- mutual settlement/waiver
+- extension workflow
+- notification workflow
+- summary/dashboard calculations
+- overdue/default transitions
+- payment movement
+- FX
+- Trust Score / Trust Graph
+- AI
