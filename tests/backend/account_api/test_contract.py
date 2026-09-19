@@ -94,7 +94,9 @@ def test_seven_endpoint_openapi_and_closed_account_models():
         (method.upper(), path)
         for path, item in schema["paths"].items()
         if path.startswith("/api/v1/")
-        and not path.startswith(("/api/v1/connections", "/api/v1/commitments"))
+        and not path.startswith(
+            ("/api/v1/connections", "/api/v1/commitments", "/api/v1/repayments")
+        )
         for method in item
     }
     assert operations == set(PROTECTED) | {

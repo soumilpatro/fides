@@ -97,7 +97,9 @@ def test_b2_surface_unchanged_with_b4_connections():
         (method, path)
         for path, item in schema["paths"].items()
         if path.startswith("/api/v1/")
-        and not path.startswith(("/api/v1/connections", "/api/v1/commitments"))
+        and not path.startswith(
+            ("/api/v1/connections", "/api/v1/commitments", "/api/v1/repayments")
+        )
         for method in item
     }
     assert operations == {

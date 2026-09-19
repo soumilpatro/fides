@@ -128,7 +128,12 @@ def test_exact_openapi():
         if p.startswith(BASE)
         for m in item
     }
-    assert operations == set(ROUTES) | {("GET", "/{id}/terms"), ("GET", "/{id}/installments")}
+    assert operations == set(ROUTES) | {
+        ("GET", "/{id}/terms"),
+        ("GET", "/{id}/installments"),
+        ("GET", "/{id}/repayments"),
+        ("POST", "/{id}/repayments"),
+    }
     models = schema["components"]["schemas"]
     request = models["CommitmentRequest"]
     assert request["additionalProperties"] is False

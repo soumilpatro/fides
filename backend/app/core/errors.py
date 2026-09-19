@@ -108,6 +108,8 @@ class FinancialError(Exception):
             "CONFLICT": (409, "Conflict."),
             "IDEMPOTENCY_CONFLICT": (409, "Idempotency key conflicts with this request."),
             "INVALID_AMOUNT": (422, "Invalid amount."),
+            "OVER_REPAYMENT": (409, "Repayment exceeds available reporting capacity."),
+            "CURRENCY_MISMATCH": (422, "Currency does not match commitment."),
         }[code]
         self.code = code
         super().__init__(code)
@@ -134,7 +136,9 @@ def _response_headers(
     if (
         auth
         or _is_auth_request(request)
-        or request.url.path.startswith(("/api/v1/connections", "/api/v1/commitments"))
+        or request.url.path.startswith(
+            ("/api/v1/connections", "/api/v1/commitments", "/api/v1/repayments")
+        )
     ):
         result["Cache-Control"] = "no-store"
     # State survives middleware ContextVar reset, including unhandled 500s.
@@ -220,11 +224,19 @@ def register_exception_handlers(app: FastAPI) -> None:
                 code = "MALFORMED_REQUEST"
             elif types == {"invalid_phone"}:
                 code = "INVALID_PHONE"
-        if request.url.path.startswith(("/api/v1/connections", "/api/v1/commitments")):
+        if request.url.path.startswith(
+            ("/api/v1/connections", "/api/v1/commitments", "/api/v1/repayments")
+        ):
             if any(error["type"] == "json_invalid" for error in exc.errors()):
                 code = "MALFORMED_REQUEST"
         if request.url.path.startswith("/api/v1/commitments") and code != "MALFORMED_REQUEST":
-            if any(error["loc"] == ("body", "principal_amount_minor") for error in exc.errors()):
+            if request.url.path.endswith("/repayments") and any(
+                error["loc"] == ("body", "amount_minor") for error in exc.errors()
+            ):
+                return await financial_exception_handler(request, FinancialError("INVALID_AMOUNT"))
+            if not request.url.path.endswith("/repayments") and any(
+                error["loc"] == ("body", "principal_amount_minor") for error in exc.errors()
+            ):
                 return await financial_exception_handler(request, FinancialError("INVALID_AMOUNT"))
         status_code, message = AUTH_ERRORS[code]
         return JSONResponse(
