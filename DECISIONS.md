@@ -4262,3 +4262,924 @@ Do NOT implement:
 - DB-role provisioning
 - schema migration
 - dependency change
+
+
+## B10-D0 — Due-Date Extension Contract
+
+Date: 2026-09-20
+Status: APPROVED founder/product decision
+Scope: B10 Due-Date Extension Workflow
+
+### 1. Scope
+
+B10 supports only due-date extension for Commitments whose current effective TermsVersion uses a single due date.
+
+Allowed change:
+
+existing single due date
+-> strictly later single due date
+
+B10 is NOT a general terms-amendment engine.
+
+Do NOT implement:
+- no-deadline -> deadline conversion
+- installment schedule changes
+- adding/removing installments
+- grace-period changes
+- interest-type changes
+- interest-rate changes
+- principal changes
+- currency changes
+- lender/borrower changes
+- settlement/waiver
+- overdue/default behavior
+
+### 2. Canonical API routes
+
+Implement exactly:
+
+POST /api/v1/commitments/{id}/extension-requests
+GET  /api/v1/commitments/{id}/extension-requests
+
+POST /api/v1/extension-requests/{id}/accept
+POST /api/v1/extension-requests/{id}/reject
+
+No aliases.
+
+These routes explicitly override conflicting older Tech-spec route spellings.
+
+Do NOT add:
+- /extensions
+- /approve
+- individual extension GET
+- generic decision endpoint
+- cancellation endpoint
+
+### 3. Requester / decision authorization
+
+Either direct Commitment participant may create an extension request.
+
+Borrower may request.
+Lender may request.
+
+The requester may NOT accept or reject their own request.
+
+Only the other direct participant may decide.
+
+Requester self-decision:
+403 FORBIDDEN
+
+Missing/unrelated Commitment or ExtensionRequest:
+404 NOT_FOUND
+"Unavailable resource."
+
+Connection BLOCKED/REMOVED does not revoke existing financial access.
+
+### 4. Account eligibility
+
+For request creation and acceptance:
+
+- both Commitment participants must be ACTIVE
+- acting user must satisfy current authentication/session eligibility
+
+For rejection:
+
+- acting deciding counterparty must satisfy current authentication/session eligibility
+- request must remain part of an existing direct financial relationship
+
+Do not invent a deactivated-user authentication exception.
+
+### 5. Eligible Commitment states
+
+Request creation and acceptance are allowed only when parent Commitment status is:
+
+ACTIVE
+PARTIALLY_REPAID
+
+Do NOT allow creation/acceptance when parent is:
+
+PENDING_CONFIRMATION
+FULLY_REPAID
+CLOSED
+REJECTED
+CANCELLED
+
+Invalid parent state:
+409 INVALID_STATE
+
+The current due date does NOT need to have been reached.
+
+Requests may be made:
+- before current due date
+- after current due date
+
+No overdue/default engine is introduced.
+
+### 6. Date rule
+
+requested_due_date must be strictly later than the base/current contractual due date.
+
+Equal date:
+invalid
+
+Earlier date:
+invalid
+
+Later date:
+valid
+
+There is NO separate rule requiring requested_due_date to be after today's date.
+
+Compare contractual calendar dates directly.
+
+Do not reinterpret the old due date using the requester's current profile timezone.
+
+### 7. Single-date schedule only
+
+The current effective TermsVersion must represent a single-date schedule.
+
+Do NOT allow B10 on:
+- no-deadline schedules
+- installment schedules
+
+Unsupported current schedule mode:
+409 INVALID_STATE
+
+Do not create, update, delete, renumber, or allocate Installment rows.
+
+### 8. One pending request per Commitment
+
+At most one ExtensionRequest with status REQUESTED may exist for one Commitment at a time.
+
+Competing request creation:
+409 CONFLICT
+
+Enforce transactionally using the parent Commitment lock.
+
+Do NOT add a DB uniqueness constraint.
+
+After a request becomes:
+ACCEPTED
+or
+REJECTED
+
+a new request may later be created if the Commitment remains eligible.
+
+### 9. Extension lifecycle
+
+Bounded B10 allows only:
+
+REQUESTED -> ACCEPTED
+REQUESTED -> REJECTED
+
+Do NOT implement:
+- cancellation route
+- expiration
+- automatic expiry
+- reopen
+- reconsideration
+- reversal
+
+The existing CANCELLED enum remains unused by bounded B10.
+
+Do not invent behavior for CANCELLED.
+
+### 10. Pending request after parent becomes ineligible
+
+If a REQUESTED extension exists and parent Commitment becomes ineligible before decision:
+
+ACCEPT:
+409 INVALID_STATE
+
+REJECT:
+remains allowed if the deciding counterparty is currently eligible.
+
+Reason:
+rejection does not amend authoritative financial terms and may cleanly resolve the stale workflow.
+
+### 11. Create request body
+
+Exact closed body:
+
+{
+  "requested_due_date": "YYYY-MM-DD",
+  "reason": "Optional explanation"
+}
+
+Rules:
+
+requested_due_date:
+- required
+- non-null
+- strict YYYY-MM-DD calendar date
+
+reason:
+- optional
+- nullable
+- strict string or null
+- trim surrounding whitespace
+- blank -> null
+- maximum 500 characters after trimming
+
+Reject unknown fields.
+
+Do NOT accept client-supplied:
+- requester ID
+- actor ID
+- status
+- base terms ID
+- current/previous due date
+- decision actor
+- timestamps
+- interest fields
+- grace
+- schedule fields
+- principal
+- currency
+
+### 12. Accept / reject bodies
+
+Accept body:
+
+{}
+
+Reject body:
+
+{}
+
+Require a JSON object under existing mutation request conventions.
+
+Reject unknown fields.
+
+No decision note.
+
+No client timestamp.
+
+No client actor/status/resource fields.
+
+### 13. Base TermsVersion capture
+
+At request creation, server stores immutable request context in ExtensionRequest.requested_terms:
+
+{
+  "base_terms_version_id": "<uuid>"
+}
+
+This is server-generated only.
+
+Do not accept base_terms_version_id from the client.
+
+The historical previous due date is derived from this immutable base TermsVersion.
+
+Do NOT add a dedicated database column.
+
+### 14. Stale-base protection
+
+At acceptance time:
+
+stored base_terms_version_id
+
+must equal:
+
+current effective TermsVersion ID
+
+under the locked parent Commitment.
+
+If not:
+409 CONFLICT
+
+Do NOT silently rebase a stale extension request to newer terms.
+
+### 15. TermsVersion creation
+
+Successful ACCEPT must create exactly one new immutable TermsVersion.
+
+Proposal:
+creates no TermsVersion.
+
+Rejection:
+creates no TermsVersion.
+
+New TermsVersion:
+
+version_no =
+max existing version_no for this Commitment + 1
+
+effective_at =
+server acceptance time
+
+created_by_user_id =
+accepting counterparty
+
+Copy unchanged fields from base TermsVersion, including:
+- interest_type
+- interest_rate_bps
+- grace_period_days
+- schedule metadata
+- contractual due timezone
+- all other unchanged approved TermsVersion fields
+
+Change only:
+due_date = requested_due_date
+
+Old TermsVersions remain immutable.
+
+### 16. Immediate effectiveness
+
+Accepted extension becomes effective immediately at server acceptance time.
+
+Do NOT support:
+- future-dated extension activation
+- scheduled activation
+
+Current terms remain selected as:
+
+highest version_no
+where effective_at <= evaluation time
+
+### 17. Repayment interaction
+
+Pending repayment reports do NOT block extension request creation or acceptance.
+
+Because bounded B10 changes only due date:
+
+O unchanged
+V unchanged
+Q unchanged
+verified outstanding unchanged
+reporting capacity unchanged
+
+Existing VERIFIED repayments remain unchanged.
+
+Existing PENDING_VERIFICATION repayments remain unchanged.
+
+Existing DISPUTED repayments remain unchanged.
+
+Repayment verification after extension acceptance uses the newly current effective TermsVersion.
+
+Do not rewrite or recalculate historical repayment/verification records.
+
+### 18. No obligation reduction
+
+B10 must never reduce:
+- original principal
+- approved interest
+- total obligation
+- verified outstanding through term amendment
+
+B10 is not:
+- waiver
+- settlement
+- forgiveness
+- debt correction
+
+### 19. ExtensionResponse
+
+Exact response:
+
+{
+  "id": "<uuid>",
+  "commitment_id": "<uuid>",
+  "requested_by": {
+    "id": "<uuid>",
+    "display_name": "<current display name>"
+  },
+  "status": "REQUESTED|ACCEPTED|REJECTED|CANCELLED",
+  "base_terms_version_id": "<uuid>",
+  "previous_due_date": "YYYY-MM-DD",
+  "requested_due_date": "YYYY-MM-DD",
+  "reason": "<string|null>",
+  "decided_by": {
+    "id": "<uuid>",
+    "display_name": "<current display name>"
+  } | null,
+  "decided_at": "<UTC RFC3339|null>",
+  "created_at": "<UTC RFC3339>"
+}
+
+Use previous_due_date, not current_due_date.
+
+previous_due_date means the historical due date captured through the immutable base TermsVersion.
+
+Names are current profile projections.
+
+Do not embed:
+- updated Commitment
+- full TermsVersion
+- repayment state
+- ledger event
+- audit data
+- idempotency internals
+
+### 20. Create success
+
+POST /api/v1/commitments/{id}/extension-requests
+
+returns:
+
+201 ExtensionResponse
+
+Initial status:
+REQUESTED
+
+decided_by:
+null
+
+decided_at:
+null
+
+### 21. Accept / reject success
+
+POST /api/v1/extension-requests/{id}/accept
+
+returns:
+
+200 ExtensionResponse
+status = ACCEPTED
+
+POST /api/v1/extension-requests/{id}/reject
+
+returns:
+
+200 ExtensionResponse
+status = REJECTED
+
+### 22. Extension list
+
+GET /api/v1/commitments/{id}/extension-requests
+
+Both direct participants may read.
+
+Order:
+
+created_at DESC
+then id ASC
+
+No pagination in bounded B10.
+
+Empty list:
+
+[]
+
+No filters.
+
+No individual extension GET endpoint.
+
+### 23. Reason visibility
+
+ExtensionRequest.reason is visible only to authorized direct participants through ExtensionResponse/list.
+
+Do NOT copy reason into:
+- LedgerEvent payload
+- AuditLog metadata
+- operational logs
+
+### 24. Idempotency
+
+All B10 POST mutations require Idempotency-Key:
+
+- create
+- accept
+- reject
+
+Reuse existing approved B5/B7/B8 policy.
+
+Key:
+1–128 characters
+
+Allowed:
+[A-Za-z0-9._:-]
+
+Missing/malformed:
+400 MALFORMED_REQUEST
+
+Scope:
+authenticated actor
++ exact endpoint/operation
++ Commitment or ExtensionRequest resource
++ key
+
+Same scope + same normalized request:
+return original completed response
+
+Same key/scope + changed normalized request:
+409 IDEMPOTENCY_CONFLICT
+
+Concurrent same-scope in-flight:
+409 CONFLICT
+
+Successful results retained for 30 days.
+
+Failed requests are not cached.
+
+Replay:
+- reauthenticate
+- reauthorize same protected resource/action
+- return original completed response
+- do NOT repeat domain mutation
+- do NOT append duplicate TermsVersion
+- do NOT append duplicate ledger/audit rows
+
+Same textual key may be reused across distinct endpoint scopes.
+
+No ExtensionRequest idempotency FK.
+
+No migration.
+
+### 25. Lock ordering
+
+Use:
+
+1. validate/normalize request and idempotency key
+2. acquire scoped idempotency advisory lock
+3. discover participant IDs non-authoritatively
+4. lock affected Users in UUID order
+5. revalidate account/session eligibility
+6. authorize and lock parent Commitment
+7. for decisions, lock ExtensionRequest
+8. reread parent association/requester/state/base terms/current terms
+9. enforce one-pending / stale-base / date / state rules
+10. apply request or decision
+11. on acceptance append TermsVersion
+12. append LedgerEvent
+13. append AuditLog
+14. persist completed idempotency result
+15. commit once
+
+Never acquire child ExtensionRequest before parent Commitment.
+
+### 26. Concurrency
+
+Expected outcomes:
+
+proposal vs proposal:
+one succeeds
+one returns 409 CONFLICT
+
+accept vs reject:
+one succeeds
+loser rereads terminal request state and rejects
+
+accept vs accept:
+one effect only
+
+proposal vs repayment report:
+serialized through parent Commitment
+
+accept vs repayment verification:
+serialized through parent Commitment
+
+accept vs future extension decision:
+serialized through parent Commitment
+
+account deactivation vs mutation:
+coordinated through ordered User locks
+
+Connection block/remove:
+no financial-access revocation
+no Connection-lock dependency
+
+### 27. Atomicity
+
+Successful create atomically commits:
+- ExtensionRequest
+- EXTENSION_REQUESTED ledger
+- EXTENSION_REQUESTED audit
+- completed idempotency result
+
+Successful accept atomically commits:
+- ExtensionRequest status = ACCEPTED
+- decided_by_user_id
+- decided_at
+- exactly one new TermsVersion
+- EXTENSION_ACCEPTED ledger
+- EXTENSION_ACCEPTED audit
+- completed idempotency result
+
+Successful reject atomically commits:
+- ExtensionRequest status = REJECTED
+- decided_by_user_id
+- decided_at
+- EXTENSION_REJECTED ledger
+- EXTENSION_REJECTED audit
+- completed idempotency result
+
+Any required-step failure rolls back all effects.
+
+### 28. Ledger event names
+
+Approve exactly:
+
+EXTENSION_REQUESTED
+EXTENSION_ACCEPTED
+EXTENSION_REJECTED
+
+Exactly one LedgerEvent per successful extension action.
+
+Do NOT create an extra generic terms-change event.
+
+### 29. EXTENSION_REQUESTED ledger
+
+Actor:
+requester
+
+Ledger commitment reference:
+parent Commitment
+
+Ledger terms_version_id:
+captured base TermsVersion
+
+amount_minor:
+null
+
+currency:
+null
+
+Closed event details:
+
+extension_request_id
+base_terms_version_id
+requested_by_user_id
+previous_due_date
+requested_due_date
+status = REQUESTED
+
+Do not include reason.
+
+No money-movement implication.
+
+### 30. EXTENSION_ACCEPTED ledger
+
+Actor:
+accepting counterparty
+
+Ledger commitment reference:
+parent Commitment
+
+Ledger terms_version_id:
+new resulting TermsVersion
+
+amount_minor:
+null
+
+currency:
+null
+
+Closed event details:
+
+extension_request_id
+base_terms_version_id
+terms_version_id
+requested_by_user_id
+previous_due_date
+requested_due_date
+status = ACCEPTED
+
+Do not include reason.
+
+No money-movement implication.
+
+### 31. EXTENSION_REJECTED ledger
+
+Actor:
+rejecting counterparty
+
+Ledger commitment reference:
+parent Commitment
+
+Ledger terms_version_id:
+captured base TermsVersion
+
+amount_minor:
+null
+
+currency:
+null
+
+Closed event details:
+
+extension_request_id
+base_terms_version_id
+requested_by_user_id
+previous_due_date
+requested_due_date
+status = REJECTED
+
+Do not include reason.
+
+### 32. Audit events
+
+Use exact actions:
+
+EXTENSION_REQUESTED
+EXTENSION_ACCEPTED
+EXTENSION_REJECTED
+
+Object:
+
+object_type = ExtensionRequest
+object_id = ExtensionRequest UUID
+
+Actors:
+
+REQUESTED:
+requester
+
+ACCEPTED:
+accepting counterparty
+
+REJECTED:
+rejecting counterparty
+
+result:
+SUCCESS
+
+metadata:
+sanitized request_id only
+
+Do NOT include:
+- reason
+- request body
+- dates as free-text metadata
+- auth token
+- Authorization header
+- credential hash
+- idempotency key
+- raw IP
+- user-agent
+
+Do not introduce new durable failed-financial-attempt audit policy.
+
+### 33. B9 timeline integration
+
+B10 must update the B9 timeline reader/projector before enabling extension event writers.
+
+Add supported event types:
+
+EXTENSION_REQUESTED
+EXTENSION_ACCEPTED
+EXTENSION_REJECTED
+
+Preserve B9:
+- occurred_at ASC, id ASC
+- existing keyset pagination
+- authorization
+- privacy rules
+- malformed/unsupported event fail-safe behavior
+
+Do not change existing seven B9 event projections.
+
+### 34. B9 extension timeline projections
+
+EXTENSION_REQUESTED details:
+
+extension_request_id
+base_terms_version_id
+requested_by_user_id
+previous_due_date
+requested_due_date
+status = REQUESTED
+
+EXTENSION_ACCEPTED details:
+
+extension_request_id
+base_terms_version_id
+terms_version_id
+requested_by_user_id
+previous_due_date
+requested_due_date
+status = ACCEPTED
+
+EXTENSION_REJECTED details:
+
+extension_request_id
+base_terms_version_id
+requested_by_user_id
+previous_due_date
+requested_due_date
+status = REJECTED
+
+Do not expose ExtensionRequest.reason in B9 timeline.
+
+Actor:
+- request event -> requester
+- accepted/rejected -> deciding counterparty
+
+Use current display-name projection.
+
+### 35. Error contract
+
+Missing Commitment:
+404 NOT_FOUND
+
+Missing ExtensionRequest:
+404 NOT_FOUND
+
+Unrelated user:
+same 404 NOT_FOUND
+
+Requester attempts accept/reject:
+403 FORBIDDEN
+
+Parent state invalid for request creation/acceptance:
+409 INVALID_STATE
+
+Request already ACCEPTED/REJECTED/CANCELLED:
+409 INVALID_STATE
+
+Equal/earlier requested date:
+422 VALIDATION_ERROR
+
+Unsupported parent schedule mode:
+409 INVALID_STATE
+
+Existing REQUESTED extension:
+409 CONFLICT
+
+Stale base TermsVersion:
+409 CONFLICT
+
+Invalid date/reason/schema:
+422 VALIDATION_ERROR
+
+Missing/malformed Idempotency-Key or malformed JSON:
+400 MALFORMED_REQUEST
+
+Same idempotency key + changed request:
+409 IDEMPOTENCY_CONFLICT
+
+Same-scope in-flight:
+409 CONFLICT
+
+Corrupt stored parent/base/request/reference state:
+503 SERVICE_UNAVAILABLE
+
+Error precedence after authentication/schema validation:
+
+1. unavailable resource
+2. wrong action role
+3. parent/request state
+4. stale-base/date/invariant validation
+
+No IDOR leakage.
+
+### 36. No migration / index / dependency
+
+Bounded B10 requires:
+- no migration
+- no index
+- no dependency
+- no new enum
+- no uniqueness constraint
+- no ExtensionRequest idempotency FK
+- no TermsVersion source-extension FK
+- no resulting-version FK
+- no installment schema change
+
+One-pending invariant is enforced transactionally under parent Commitment lock.
+
+If implementation unexpectedly requires persistence/index/dependency changes:
+STOP.
+Report exact blocker.
+Do not invent or apply the change.
+
+### 37. FUTURE-FIN-D0 compatibility
+
+B10 must never:
+- waive principal
+- reduce interest
+- modify original principal
+- change verified repayment history
+- create fake repayment
+- create fake waiver
+- represent settlement
+- set Commitment CLOSED
+- imply extension equals forgiveness
+
+Future mutual settlement remains separate.
+
+### 38. Explicit exclusions
+
+Do NOT implement:
+- extension cancellation
+- expiration
+- automatic expiry
+- reopen/reconsideration
+- reversal
+- no-deadline -> deadline conversion
+- installment schedule amendments
+- installment row mutation
+- grace amendment
+- interest amendment
+- principal amendment
+- currency amendment
+- party reassignment
+- settlement/waiver
+- notifications
+- summaries/dashboard
+- overdue/default
+- Trust Score
+- Trust Graph
+- AI
+- payment movement/custody
+- FX
