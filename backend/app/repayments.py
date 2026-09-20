@@ -39,7 +39,7 @@ class Capacity:
     reportable_remaining: int
 
 
-def reporting_capacity(db, commitment, now):
+def repayment_accounting(db, commitment, now):
     """Caller holds parent lock; PostgreSQL SUM stays exact for BIGINT amounts."""
     terms = db.scalar(
         select(CommitmentTermsVersion)
@@ -78,11 +78,19 @@ def reporting_capacity(db, commitment, now):
     )
     verified = int(sums.get(RepaymentStatus.VERIFIED, 0))
     pending = int(sums.get(RepaymentStatus.PENDING_VERIFICATION, 0))
-    if invalid is not None or verified > obligation or verified + pending > obligation:
+    if invalid is not None or verified > obligation:
         raise ValueError("Inconsistent persisted repayment capacity")
     return terms.id, Capacity(
         obligation, obligation - verified, pending, obligation - verified - pending
     )
+
+
+def reporting_capacity(db, commitment, now):
+    """B7 additionally rejects inconsistent pending reservations; B8 VERIFY does not."""
+    terms_id, capacity = repayment_accounting(db, commitment, now)
+    if capacity.reportable_remaining < 0:
+        raise ValueError("Inconsistent persisted repayment capacity")
+    return terms_id, capacity
 
 
 class RepaymentService:

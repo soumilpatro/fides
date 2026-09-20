@@ -23,12 +23,14 @@ DETAIL = "/api/v1/repayments/{id}"
 
 def test_openapi_exact_b7_contract():
     schema = create_app().openapi()
-    paths = {p: set(ops) for p, ops in schema["paths"].items() if "repayments" in p}
+    paths = {
+        p: {method for method, op in ops.items() if "Repayments" in op.get("tags", [])}
+        for p, ops in schema["paths"].items()
+        if any("Repayments" in op.get("tags", []) for op in ops.values())
+    }
     assert paths == {COLLECTION: {"post", "get"}, DETAIL: {"get"}}
     assert not any(
-        s in p
-        for p in schema["paths"]
-        for s in ("settlement", "waiver", "verify-repayment", "dispute")
+        s in p for p in schema["paths"] for s in ("settlement", "waiver", "verify-repayment")
     )
     models = schema["components"]["schemas"]
     assert set(models["RepaymentResponse"]["properties"]) == FIELDS

@@ -32,11 +32,24 @@ class Idempotency:
     def __init__(self, sessions):
         self.sessions = sessions
 
-    def execute(self, db, principal, operation, resource, key, payload, perform, replay_authorize):
+    def execute(
+        self,
+        db,
+        principal,
+        operation,
+        resource,
+        key,
+        payload,
+        perform,
+        replay_authorize,
+        *,
+        endpoint=None,
+    ):
         validate_key(key)
-        endpoint = (
-            f"POST /api/v1/commitments{('/' + str(resource) + '/' + operation) if resource else ''}"
-        )
+        # Default preserves every historical B5/B7 scope and request hash.
+        if endpoint is None:
+            suffix = ("/" + str(resource) + "/" + operation) if resource else ""
+            endpoint = f"POST /api/v1/commitments{suffix}"
         scope = canonical([str(principal.user_id), endpoint, key])
         lock_id = int.from_bytes(
             hashlib.sha256(("b5-idempotency:" + scope).encode()).digest()[:8], "big", signed=True

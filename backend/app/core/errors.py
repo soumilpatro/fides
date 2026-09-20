@@ -125,6 +125,18 @@ class ResourceUnavailable(Exception):
         super().__init__(self.code)
 
 
+class VerificationError(FinancialError):
+    """B8-specific vocabulary/wording; preserves B7 reporting messages."""
+
+    def __init__(self, code: str):
+        self.status_code, self.message = {
+            "ALREADY_VERIFIED": (409, "Repayment is already verified."),
+            "OVER_REPAYMENT": (409, "Repayment exceeds current verified outstanding."),
+        }[code]
+        self.code = code
+        Exception.__init__(self, code)
+
+
 def _is_auth_request(request: Request) -> bool:
     return request.url.path.startswith(("/api/v1/auth/", "/api/v1/me"))
 

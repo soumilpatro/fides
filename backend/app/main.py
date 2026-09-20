@@ -25,6 +25,7 @@ from app.api.health import router as health_router
 from app.api.me import router as me_router
 from app.api.repayments import router as repayments_router
 from app.api.terms import router as terms_router
+from app.api.verification import router as verification_router
 from app.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import RequestCorrelationMiddleware, configure_logging
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(commitments_router)
     app.include_router(terms_router)
     app.include_router(repayments_router)
+    app.include_router(verification_router)
 
     return app
 
