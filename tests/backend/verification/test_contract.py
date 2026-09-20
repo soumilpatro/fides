@@ -29,7 +29,6 @@ def test_exact_openapi_contract():
             "evidence",
             "allocation",
             "/verifications",
-            "/ledger",
             "/extensions",
         )
     )

@@ -22,6 +22,7 @@ from app.api.auth import router as auth_router
 from app.api.commitments import router as commitments_router
 from app.api.connections import router as connections_router
 from app.api.health import router as health_router
+from app.api.ledger import router as ledger_router
 from app.api.me import router as me_router
 from app.api.repayments import router as repayments_router
 from app.api.terms import router as terms_router
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(terms_router)
     app.include_router(repayments_router)
     app.include_router(verification_router)
+    app.include_router(ledger_router)
 
     return app
 
