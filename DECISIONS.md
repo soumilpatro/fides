@@ -3650,3 +3650,615 @@ Do NOT implement:
 - FX
 - Trust Score / Trust Graph
 - AI
+
+
+## B9-D0 — Ledger / Audit / Commitment Timeline Contract
+
+Date: 2026-09-20
+Status: APPROVED founder/product decision
+Scope: B9 Ledger / Audit / Commitment Timeline
+
+### 1. Financial authority
+
+Domain tables remain authoritative for current financial state.
+
+LedgerEvent is:
+- immutable historical evidence
+- an auditable commitment timeline
+- a reconciliation aid
+
+LedgerEvent is NOT:
+- the authoritative outstanding calculator
+- a replacement for Commitment / TermsVersion / Repayment / verification state
+- a general event-sourcing reconstruction engine for current state
+
+Do not calculate current outstanding by summing ledger amounts.
+
+### 2. Canonical public route
+
+Implement exactly:
+
+GET /api/v1/commitments/{id}/ledger
+
+Do NOT add:
+/api/v1/commitments/{id}/history
+
+No alias.
+
+This explicitly resolves the existing Tech/API route conflict in favor of /ledger.
+
+### 3. B9 public scope
+
+B9 exposes Commitment-scoped ledger history only.
+
+Do NOT implement:
+- global user activity
+- dashboard recent-activity endpoint
+- individual ledger-event endpoint
+- public AuditLog endpoint
+- operator/admin audit endpoint
+
+### 4. Public representation
+
+Do NOT expose raw LedgerEvent ORM/storage rows.
+
+Public API returns a safe projected timeline with closed, event-specific schemas.
+
+Do NOT expose:
+- raw event_payload
+- created_at
+- audit metadata
+- request IDs
+- object_type/result
+- storage-only fields
+- arbitrary JSON keys
+- idempotency internals
+
+### 5. Supported B9 event types
+
+Expose exactly these current event types:
+
+COMMITMENT_PROPOSED
+COMMITMENT_CONFIRMED
+COMMITMENT_REJECTED
+COMMITMENT_CANCELLED
+REPAYMENT_REPORTED
+REPAYMENT_VERIFIED
+REPAYMENT_DISPUTED
+
+Do not rename historical events.
+
+Do NOT synthesize:
+COMMITMENT_CREATED
+COMMITMENT_ACTIVATED
+or any other artificial historical event.
+
+### 6. Future event visibility
+
+Future approved:
+- terms changes
+- extension events
+- settlement events
+
+may join the same timeline only after their own event contracts are approved.
+
+Initial B6 TermsVersion remains represented through COMMITMENT_PROPOSED terms_version_id.
+
+Do not create a synthetic initial-terms event in B9.
+
+### 7. Response envelope
+
+Use exactly:
+
+{
+  "items": [],
+  "next_cursor": null
+}
+
+Each item has common fields:
+
+{
+  "id": "<event UUID>",
+  "commitment_id": "<Commitment UUID>",
+  "event_type": "<approved event code>",
+  "actor": {
+    "id": "<User UUID>",
+    "display_name": "<current display name>"
+  },
+  "occurred_at": "<UTC RFC3339>",
+  "details": {}
+}
+
+actor may be null only for a future explicitly approved system event.
+
+All current seven event writers are expected to have participant actors.
+
+### 8. Actor projection
+
+Project actor as current:
+
+{
+  "id": "...",
+  "display_name": "..."
+}
+
+Do NOT create historical display-name snapshots.
+
+If the user later changes display_name, historical events display the current name.
+
+### 9. Closed event-specific details
+
+Use a discriminated union keyed by event_type.
+
+COMMITMENT_PROPOSED details:
+- status
+- terms_version_id
+
+COMMITMENT_CONFIRMED details:
+- status = ACTIVE
+
+COMMITMENT_REJECTED details:
+- status = REJECTED
+
+COMMITMENT_CANCELLED details:
+- status = CANCELLED
+
+REPAYMENT_REPORTED details:
+- repayment_id
+- terms_version_id
+- amount_minor
+- currency
+- status = PENDING_VERIFICATION
+
+REPAYMENT_VERIFIED details:
+- repayment_id
+- verification_id
+- terms_version_id
+- amount_minor
+- currency
+- status = VERIFIED
+- resulting_verified_outstanding_minor
+- resulting_commitment_status
+
+REPAYMENT_DISPUTED details:
+- repayment_id
+- verification_id
+- amount_minor
+- currency
+- status = DISPUTED
+
+Amounts remain integer minor units.
+
+Currencies remain:
+INR
+USD
+GBP
+
+### 10. Historical-result semantics
+
+Historical event output uses values captured at event time.
+
+For example:
+REPAYMENT_VERIFIED resulting_verified_outstanding_minor and resulting_commitment_status are historical resulting values.
+
+Do NOT recompute old event output from today's current TermsVersion or current Commitment state.
+
+### 11. Reference integrity
+
+Before exposing projected references, validate:
+
+- event.commitment_id matches requested Commitment
+- referenced Repayment belongs to the same Commitment
+- referenced TermsVersion belongs to the same Commitment
+- verification_id resolves to the projected Repayment where used
+- actor reference is valid
+- no payload reference points to an unrelated resource
+
+Do not trust arbitrary IDs from JSON payload.
+
+Malformed/cross-parent known event data must fail safely.
+
+### 12. Authorization
+
+Both direct Commitment participants may read the Commitment ledger.
+
+Missing Commitment:
+404 NOT_FOUND
+"Unavailable resource."
+
+Unrelated user:
+same 404 NOT_FOUND response.
+
+Connected-but-unrelated user:
+not authorized.
+
+Connection BLOCKED/REMOVED:
+does not revoke existing financial-history access.
+
+CLOSED Commitment:
+history remains readable to currently eligible authenticated participants.
+
+Account deactivation:
+- records remain preserved
+- deactivated user does not receive an authentication exception
+- eligible counterparty retains access
+
+### 13. Timeline ordering
+
+Order by:
+
+occurred_at ASC
+then id ASC
+
+This is deterministic event-time ordering.
+
+Do NOT claim:
+- strict causal ordering
+- commit ordering
+- UUID chronological semantics
+
+UUID is only the deterministic tie-break.
+
+### 14. Pagination
+
+Use keyset pagination.
+
+Request:
+
+GET /api/v1/commitments/{id}/ledger?limit=50&cursor=<opaque-cursor>
+
+Rules:
+- default limit = 50
+- maximum limit = 100
+- positive integer only
+- no offset pagination
+- no filters in bounded B9
+- cursor is opaque
+- cursor contains validated version / Commitment / ordering-position state
+- cursor never grants authorization
+- every page request independently authenticates and authorizes the path Commitment
+
+Response:
+
+{
+  "items": [...],
+  "next_cursor": "<opaque string|null>"
+}
+
+Empty authorized timeline:
+
+{
+  "items": [],
+  "next_cursor": null
+}
+
+Invalid limit or cursor:
+422 VALIDATION_ERROR
+
+### 15. Pagination consistency
+
+B9 provides live keyset pagination.
+
+It does NOT guarantee a frozen point-in-time snapshot across multiple page requests.
+
+Do not add:
+- snapshot IDs
+- timeline sessions
+- cross-page database snapshot guarantees
+
+If new earlier-timestamp data becomes visible between requests, client refresh may be required.
+
+### 16. Unsupported / malformed event behavior
+
+Known event type with malformed stored payload:
+503 SERVICE_UNAVAILABLE
+
+Unsupported historical event_type:
+503 SERVICE_UNAVAILABLE
+
+Do NOT:
+- silently omit
+- return raw event
+- expose arbitrary payload
+- invent generic fallback
+
+For MVP, readers for a new event type must be deployed before that event writer is enabled.
+
+### 17. Payload evolution
+
+Do NOT add:
+- schema_version column
+- event enum migration
+- payload version column
+
+For MVP use:
+- stable semantic event names
+- validated closed event-specific projection schemas
+- explicit future decisions for incompatible changes
+
+Never change the historical meaning of an existing event code.
+
+### 18. Ledger semantic/privacy rules
+
+Do not expose or newly store through B9:
+- decision_note
+- evidence
+- free-form financial notes
+- phone numbers
+- display-name snapshots
+- raw request bodies
+- auth credentials
+- tokens
+- idempotency keys
+- secrets
+
+REPAYMENT_DISPUTED amount represents the disputed reported amount.
+
+It is NOT:
+- verified repayment credit
+- waived amount
+
+No current event means Fides moved or held money.
+
+### 19. LedgerEvent versus AuditLog
+
+LedgerEvent:
+- domain/financial meaning
+- Commitment history
+- user-visible only through safe timeline projection
+
+AuditLog:
+- separate internal action/security/administrative trail
+- actor
+- object
+- result
+- sanitized correlation metadata
+
+Do not merge these concepts.
+
+### 20. Audit public exposure
+
+AuditLog remains internal.
+
+Do NOT implement:
+- public AuditLog route
+- admin/operator audit route
+- audit timeline mixed into Commitment ledger
+
+Tests should verify that no B9 public audit resource exists.
+
+### 21. Failed-action auditing
+
+Do NOT introduce universal durable financial-failure AuditLog rows in B9.
+
+Preserve existing behavior:
+- current B5–B8 successful financial mutations audit SUCCESS
+- already-approved B2 denial auditing remains unchanged
+- existing sanitized operational logging remains unchanged
+
+Any broader failed-financial-attempt auditing policy is deferred.
+
+### 22. Audit privacy
+
+Do NOT copy into AuditLog metadata:
+- decision_note
+- evidence
+- raw request body
+- auth token
+- credential hash
+- Authorization header
+- idempotency key
+- raw IP
+
+Sanitized request_id remains permitted.
+
+Do not add in B9:
+- endpoint/path/method metadata
+- user-agent
+- raw IP
+
+### 23. Application append-only behavior
+
+B9 must preserve:
+- no ledger update service
+- no ledger delete service
+- no audit update service
+- no audit delete service
+- no public mutation endpoint for either resource
+
+B9 must never rewrite historical LedgerEvent or AuditLog rows.
+
+### 24. Production DB-role immutability boundary
+
+Production/staging runtime roles must ultimately be restricted to:
+
+SELECT
+INSERT
+
+on ledger/audit tables.
+
+B9 does NOT provision or alter runtime DB grants.
+
+DB role provisioning/verification remains in later security/infrastructure hardening, targeted for B14.
+
+Do not add triggers or grant migrations in B9.
+
+### 25. Existing persistence model is canonical
+
+Retain current LedgerEvent model:
+- string event_type
+- commitment_id
+- actor_user_id
+- amount_minor
+- currency
+- repayment_id
+- terms_version_id
+- JSONB event_payload
+- occurred_at
+- created_at
+
+Retain current AuditLog model:
+- actor_user_id
+- string action
+- object_type
+- object_id
+- result
+- JSONB metadata
+- created_at
+
+Do not introduce older Tech-spec sketches:
+- database event enum
+- generic source_id
+- entity_* rename
+- before/after snapshots
+- dedicated request_id column
+
+No schema reconciliation migration.
+
+### 26. Index policy
+
+Do NOT add a new index in bounded B9.
+
+Specifically do not add:
+
+(commitment_id, occurred_at, id)
+
+at this time.
+
+Existing indexes are accepted for MVP Commitment-scoped history.
+
+If measured performance later requires an index:
+obtain separate migration approval.
+
+### 27. Idempotency / replay
+
+B9 is read-only and adds no idempotency behavior.
+
+Existing B5–B8 retained idempotent replay must continue to create zero duplicate ledger/audit rows.
+
+Do NOT add heuristic timeline deduplication.
+
+After idempotency result expiry, genuinely newly executed allowed business actions remain separate events according to current domain rules.
+
+### 28. Atomicity
+
+Existing writers continue to atomically commit:
+
+domain mutation
++ LedgerEvent
++ AuditLog
++ completed idempotency result where applicable
+
+Failed or rolled-back financial mutations must never expose a partial successful ledger event.
+
+B9 timeline reads only committed rows.
+
+### 29. Terms provenance
+
+Preserve:
+
+COMMITMENT_PROPOSED
+-> initial TermsVersion reference
+
+REPAYMENT_REPORTED
+-> report-time TermsVersion reference
+
+REPAYMENT_VERIFIED
+-> verification-time TermsVersion reference
+
+REPAYMENT_DISPUTED
+-> no fresh verification-time TermsVersion reference
+
+Do not replace one historical provenance reference with another.
+
+Do not duplicate full TermsVersion snapshots into LedgerEvent JSON in B9.
+
+The existing authorized TermsVersion API remains the detailed terms-history resource.
+
+### 30. FUTURE-FIN-D0 compatibility
+
+Preserve:
+
+waived amount != verified repayment
+CLOSED != fully repaid
+DISPUTED != verified
+
+Future settlement history must remain capable of distinguishing:
+- pre-settlement verified outstanding
+- waived amount
+- resulting closure
+
+B9 does NOT define or implement settlement persistence/API.
+
+Never represent waiver using REPAYMENT_VERIFIED.
+
+### 31. Future extension compatibility
+
+B9 does not define:
+- extension event names
+- extension payloads
+- extension FK
+- extension API
+
+These remain B10 decisions.
+
+Existing LedgerEvent JSONB/reference structure must not be altered in a way that prevents future approved extension events.
+
+### 32. HTTP behavior
+
+GET /api/v1/commitments/{id}/ledger uses:
+
+- Bearer authentication
+- Cache-Control: no-store
+- sanitized X-Request-ID
+- existing safe exception handling
+
+No Idempotency-Key required.
+
+Missing/unrelated Commitment remains:
+404 NOT_FOUND
+
+No participant-role 403 for collection access.
+
+### 33. No migration / dependency rule
+
+Bounded B9 requires:
+- no migration
+- no new index
+- no new dependency
+- no event enum
+- no sequence number
+- no payload-version column
+- no display-name snapshot field
+- no generic source FK
+
+If safe implementation unexpectedly requires any of those:
+STOP.
+Report the exact blocker.
+Do not invent or apply it.
+
+### 34. Explicit B9 exclusions
+
+Do NOT implement:
+- B10 extension workflow
+- actual terms amendments
+- settlement/waiver
+- global user activity
+- dashboard recent activity endpoint
+- summaries
+- notifications
+- overdue/default
+- Trust Score
+- Trust Graph
+- AI
+- payment movement/custody
+- FX
+- public audit endpoint
+- admin audit UI/API
+- financial-history deletion
+- anonymization policy
+- retention-period policy
+- new legal/privacy policy
+- DB-role provisioning
+- schema migration
+- dependency change
