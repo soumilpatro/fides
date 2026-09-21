@@ -131,6 +131,8 @@ def test_exact_openapi():
     assert operations == set(ROUTES) | {
         ("GET", "/{id}/terms"),
         ("GET", "/{id}/ledger"),
+        ("GET", "/{id}/extension-requests"),
+        ("POST", "/{id}/extension-requests"),
         ("GET", "/{id}/installments"),
         ("GET", "/{id}/repayments"),
         ("POST", "/{id}/repayments"),

@@ -159,6 +159,7 @@ def test_exact_openapi():
         **{BASE + "/{id}/" + a: {"get"} for a in ("terms", "installments")},
         BASE + "/{id}/repayments": {"get", "post"},
         BASE + "/{id}/ledger": {"get"},
+        BASE + "/{id}/extension-requests": {"get", "post"},
     }
     assert "terms" not in models["CommitmentRequest"]["required"]
     assert models["CommitmentRequest"]["properties"]["terms"]["$ref"].endswith("TermsRequest")

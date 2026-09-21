@@ -17,7 +17,14 @@ def test_openapi_closed_variants_errors_and_bearer():
     assert {
         path
         for path in schema["paths"]
-        if not path.startswith(("/api/v1/connections", "/api/v1/commitments", "/api/v1/repayments"))
+        if not path.startswith(
+            (
+                "/api/v1/connections",
+                "/api/v1/commitments",
+                "/api/v1/repayments",
+                "/api/v1/extension-requests",
+            )
+        )
     } == {
         "/health",
         "/readiness",

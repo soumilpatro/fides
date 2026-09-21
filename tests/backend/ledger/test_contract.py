@@ -9,7 +9,18 @@ from .test_pagination import seed
 
 PATH = "/api/v1/commitments/{id}/ledger"
 COMMON = {"id", "commitment_id", "actor", "occurred_at", "event_type", "details"}
+EXTENSION_DETAILS = {
+    "extension_request_id",
+    "base_terms_version_id",
+    "requested_by_user_id",
+    "previous_due_date",
+    "requested_due_date",
+    "status",
+}
 DETAILS = {
+    "EXTENSION_REQUESTED": EXTENSION_DETAILS,
+    "EXTENSION_REJECTED": EXTENSION_DETAILS,
+    "EXTENSION_ACCEPTED": EXTENSION_DETAILS | {"terms_version_id"},
     "COMMITMENT_PROPOSED": {"status", "terms_version_id"},
     "COMMITMENT_CONFIRMED": {"status"},
     "COMMITMENT_REJECTED": {"status"},

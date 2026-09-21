@@ -7,6 +7,7 @@ from pydantic import Field
 
 from app.api.auth_schemas import AuthSchema, UtcDatetime
 from app.api.connection_schemas import ParticipantResponse
+from app.api.term_schemas import DateOnly
 from app.models.enums import CommitmentStatus
 
 Money = Annotated[int, Field(strict=True, ge=0)]
@@ -99,6 +100,42 @@ class DisputedEvent(TimelineEvent):
     details: DisputedDetails
 
 
+class ExtensionDetails(AuthSchema):
+    extension_request_id: UUID
+    base_terms_version_id: UUID
+    requested_by_user_id: UUID
+    previous_due_date: DateOnly
+    requested_due_date: DateOnly
+
+
+class ExtensionRequestedDetails(ExtensionDetails):
+    status: Literal["REQUESTED"]
+
+
+class ExtensionAcceptedDetails(ExtensionDetails):
+    terms_version_id: UUID
+    status: Literal["ACCEPTED"]
+
+
+class ExtensionRejectedDetails(ExtensionDetails):
+    status: Literal["REJECTED"]
+
+
+class ExtensionRequestedEvent(TimelineEvent):
+    event_type: Literal["EXTENSION_REQUESTED"]
+    details: ExtensionRequestedDetails
+
+
+class ExtensionAcceptedEvent(TimelineEvent):
+    event_type: Literal["EXTENSION_ACCEPTED"]
+    details: ExtensionAcceptedDetails
+
+
+class ExtensionRejectedEvent(TimelineEvent):
+    event_type: Literal["EXTENSION_REJECTED"]
+    details: ExtensionRejectedDetails
+
+
 LedgerItem = Annotated[
     ProposedEvent
     | ConfirmedEvent
@@ -106,7 +143,10 @@ LedgerItem = Annotated[
     | CancelledEvent
     | ReportedEvent
     | VerifiedEvent
-    | DisputedEvent,
+    | DisputedEvent
+    | ExtensionRequestedEvent
+    | ExtensionAcceptedEvent
+    | ExtensionRejectedEvent,
     Field(discriminator="event_type"),
 ]
 

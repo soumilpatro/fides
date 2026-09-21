@@ -149,7 +149,12 @@ def _response_headers(
         auth
         or _is_auth_request(request)
         or request.url.path.startswith(
-            ("/api/v1/connections", "/api/v1/commitments", "/api/v1/repayments")
+            (
+                "/api/v1/connections",
+                "/api/v1/commitments",
+                "/api/v1/repayments",
+                "/api/v1/extension-requests",
+            )
         )
     ):
         result["Cache-Control"] = "no-store"
@@ -237,7 +242,12 @@ def register_exception_handlers(app: FastAPI) -> None:
             elif types == {"invalid_phone"}:
                 code = "INVALID_PHONE"
         if request.url.path.startswith(
-            ("/api/v1/connections", "/api/v1/commitments", "/api/v1/repayments")
+            (
+                "/api/v1/connections",
+                "/api/v1/commitments",
+                "/api/v1/repayments",
+                "/api/v1/extension-requests",
+            )
         ):
             if any(error["type"] == "json_invalid" for error in exc.errors()):
                 code = "MALFORMED_REQUEST"
@@ -246,7 +256,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 error["loc"] == ("body", "amount_minor") for error in exc.errors()
             ):
                 return await financial_exception_handler(request, FinancialError("INVALID_AMOUNT"))
-            if not request.url.path.endswith("/repayments") and any(
+            if not request.url.path.endswith(("/repayments", "/extension-requests")) and any(
                 error["loc"] == ("body", "principal_amount_minor") for error in exc.errors()
             ):
                 return await financial_exception_handler(request, FinancialError("INVALID_AMOUNT"))

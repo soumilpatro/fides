@@ -14,11 +14,14 @@ from sqlalchemy import select, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.ledger_schemas import LedgerResponse
+from app.api.term_schemas import TermsRequest
 from app.auth.authorization import AuthorizationService
 from app.auth.safety import auth_operation
 from app.core.errors import AuthError
+from app.core.validation import normalize_timezone
 from app.models.commitment import Commitment
 from app.models.commitment_terms_version import CommitmentTermsVersion
+from app.models.extension_request import ExtensionRequest
 from app.models.ledger_event import LedgerEvent
 from app.models.repayment import Repayment
 from app.models.repayment_verification import RepaymentVerification
@@ -33,6 +36,79 @@ EVENTS = {
     "REPAYMENT_VERIFIED",
     "REPAYMENT_DISPUTED",
 }
+EXTENSION_EVENTS = {"EXTENSION_REQUESTED", "EXTENSION_ACCEPTED", "EXTENSION_REJECTED"}
+
+
+def _extension_projection(row, parent, extensions, terms):
+    payload = row.event_payload
+    request = extensions[UUID(payload["extension_request_id"])]
+    base_id = UUID(payload["base_terms_version_id"])
+    base = terms[base_id]
+    _require(request.commitment_id == base.commitment_id == parent.id)
+    _require(request.requested_terms == {"base_terms_version_id": str(base_id)})
+    _require(UUID(payload["requested_by_user_id"]) == request.requested_by_user_id)
+    _require(request.requested_by_user_id in {parent.borrower_user_id, parent.lender_user_id})
+    # Validate the historical single-date source without adding per-event DB queries.
+    metadata = base.schedule_definition
+    _require(
+        type(metadata) is dict
+        and set(metadata) == {"schedule_mode", "due_timezone", "installment_dates"}
+    )
+    normalize_timezone(metadata["due_timezone"])
+    logical = TermsRequest(
+        due_date=base.due_date,
+        interest_type=base.interest_type.value,
+        interest_rate_bps=base.interest_rate_bps,
+        grace_period_days=base.grace_period_days,
+        installment_dates=metadata["installment_dates"],
+    )
+    _require(logical.schedule_mode == metadata["schedule_mode"] == "single")
+    _require(base.version_no >= 1)
+    _require(base.created_by_user_id in {parent.borrower_user_id, parent.lender_user_id})
+    _require(base.due_date is not None and request.requested_due_date > base.due_date)
+    _require(payload["previous_due_date"] == base.due_date.isoformat())
+    _require(payload["requested_due_date"] == request.requested_due_date.isoformat())
+    _require(row.amount_minor is None and row.currency is None and row.repayment_id is None)
+    status = row.event_type.removeprefix("EXTENSION_")
+    _require(payload["status"] == status)
+    if status == "REQUESTED":
+        _require(row.actor_user_id == request.requested_by_user_id)
+        _require(row.occurred_at == request.created_at)
+    else:
+        _require(request.status.value == status and request.decided_at == row.occurred_at)
+        _require(row.actor_user_id == request.decided_by_user_id)
+        _require(row.actor_user_id != request.requested_by_user_id)
+    if status == "ACCEPTED":
+        result = terms[UUID(payload["terms_version_id"])]
+        _require(result.id == row.terms_version_id and result.id != base_id)
+        _require(result.commitment_id == parent.id and result.version_no > base.version_no)
+        _require(result.due_date == request.requested_due_date)
+        _require(result.created_by_user_id == row.actor_user_id)
+        _require(result.effective_at == row.occurred_at)
+        _require(
+            all(
+                getattr(result, key) == getattr(base, key)
+                for key in (
+                    "interest_type",
+                    "interest_rate_bps",
+                    "grace_period_days",
+                    "schedule_definition",
+                )
+            )
+        )
+    else:
+        _require(row.terms_version_id == base_id)
+    return {
+        key: payload[key]
+        for key in (
+            "extension_request_id",
+            "base_terms_version_id",
+            "requested_by_user_id",
+            "previous_due_date",
+            "requested_due_date",
+            "status",
+        )
+    } | ({"terms_version_id": payload["terms_version_id"]} if status == "ACCEPTED" else {})
 
 
 def encode_cursor(identifier, occurred_at, event_id):
@@ -73,7 +149,25 @@ def _require(condition):
 def _project(db, parent, rows):
     """Check every public reference before building a closed response."""
     verification_ids = set()
+    extension_ids, base_ids = set(), set()
     for row in rows:
+        if row.event_type in EXTENSION_EVENTS:
+            payload = row.event_payload
+            _require(type(payload) is dict)
+            keys = {
+                "extension_request_id",
+                "base_terms_version_id",
+                "requested_by_user_id",
+                "previous_due_date",
+                "requested_due_date",
+                "status",
+            }
+            if row.event_type == "EXTENSION_ACCEPTED":
+                keys.add("terms_version_id")
+            _require(set(payload) == keys and all(type(v) is str for v in payload.values()))
+            extension_ids.add(UUID(payload["extension_request_id"]))
+            base_ids.add(UUID(payload["base_terms_version_id"]))
+            continue
         _require(row.event_type in EVENTS and type(row.event_payload) is dict)
         keys = {"status"}
         if row.event_type in ("REPAYMENT_VERIFIED", "REPAYMENT_DISPUTED"):
@@ -95,7 +189,10 @@ def _project(db, parent, rows):
         )
     }
     repayments = load(Repayment, {r.repayment_id for r in rows if r.repayment_id})
-    terms = load(CommitmentTermsVersion, {r.terms_version_id for r in rows if r.terms_version_id})
+    terms = load(
+        CommitmentTermsVersion, {r.terms_version_id for r in rows if r.terms_version_id} | base_ids
+    )
+    extensions = load(ExtensionRequest, extension_ids) if extension_ids else {}
     verifications = load(RepaymentVerification, verification_ids)
     participants = {parent.borrower_user_id, parent.lender_user_id}
     result = []
@@ -103,6 +200,21 @@ def _project(db, parent, rows):
         _require(row.commitment_id == parent.id)
         _require(row.actor_user_id in participants and row.actor_user_id in people)
         payload = row.event_payload
+        if row.event_type in EXTENSION_EVENTS:
+            result.append(
+                dict(
+                    id=row.id,
+                    commitment_id=row.commitment_id,
+                    event_type=row.event_type,
+                    actor={
+                        "id": row.actor_user_id,
+                        "display_name": people[row.actor_user_id].display_name,
+                    },
+                    occurred_at=row.occurred_at,
+                    details=_extension_projection(row, parent, extensions, terms),
+                )
+            )
+            continue
         details = {"status": payload["status"]}
         needs_terms = row.event_type in (
             "COMMITMENT_PROPOSED",
