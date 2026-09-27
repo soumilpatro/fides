@@ -7,6 +7,7 @@ from app.models.commitment import Commitment
 from app.models.commitment_terms_version import CommitmentTermsVersion
 from app.models.idempotency_key import IdempotencyKey
 from app.models.ledger_event import LedgerEvent
+from app.models.notification_event import NotificationEvent
 from sqlalchemy import delete, select
 
 from connections.conftest import api, clock, engine_env, peers, settings  # noqa: F401
@@ -41,6 +42,9 @@ def ctx(peers):  # noqa: F811
                         Commitment.created_by_user_id.in_(peers.users.values())
                     )
                 )
+            )
+            db.execute(
+                delete(NotificationEvent).where(NotificationEvent.user_id.in_(peers.users.values()))
             )
             db.execute(delete(LedgerEvent).where(LedgerEvent.commitment_id.in_(ids)))
             db.execute(delete(AuditLog).where(AuditLog.object_id.in_(ids)))

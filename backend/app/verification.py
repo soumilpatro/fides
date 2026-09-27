@@ -24,6 +24,7 @@ from app.models.ledger_event import LedgerEvent
 from app.models.repayment import Repayment
 from app.models.repayment_verification import RepaymentVerification
 from app.models.user import User
+from app.notifications import create_notification
 from app.repayments import RepaymentService, repayment_accounting
 
 
@@ -76,20 +77,19 @@ class VerificationService:
         payload = {"verification_id": str(history.id), "status": row.status.value}
         if history.decision == VerificationDecision.VERIFIED:
             payload.update(verified_outstanding=remaining, commitment_status=parent.status.value)
-        db.add(
-            LedgerEvent(
-                commitment_id=parent.id,
-                repayment_id=row.id,
-                actor_user_id=history.decided_by_user_id,
-                event_type=name,
-                amount_minor=row.amount_minor,
-                currency=row.currency,
-                terms_version_id=terms_id,
-                event_payload=payload,
-                occurred_at=now,
-                created_at=now,
-            )
+        event = LedgerEvent(
+            commitment_id=parent.id,
+            repayment_id=row.id,
+            actor_user_id=history.decided_by_user_id,
+            event_type=name,
+            amount_minor=row.amount_minor,
+            currency=row.currency,
+            terms_version_id=terms_id,
+            event_payload=payload,
+            occurred_at=now,
+            created_at=now,
         )
+        db.add(event)
         db.add(
             AuditLog(
                 actor_user_id=history.decided_by_user_id,
@@ -101,6 +101,7 @@ class VerificationService:
                 metadata_={"request_id": sanitize_request_id(request_id)},
             )
         )
+        create_notification(db, event, db.get(Commitment, event.commitment_id))
 
     @auth_operation
     def decide(self, principal, identifier, action, body, key, *, request_id=None):

@@ -154,6 +154,7 @@ def _response_headers(
                 "/api/v1/commitments",
                 "/api/v1/repayments",
                 "/api/v1/extension-requests",
+                "/api/v1/notifications",
             )
         )
     ):
@@ -247,6 +248,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "/api/v1/commitments",
                 "/api/v1/repayments",
                 "/api/v1/extension-requests",
+                "/api/v1/notifications",
             )
         ):
             if any(error["type"] == "json_invalid" for error in exc.errors()):

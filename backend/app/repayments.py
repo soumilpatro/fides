@@ -27,6 +27,7 @@ from app.models.enums import CommitmentStatus, RepaymentStatus, UserStatus
 from app.models.ledger_event import LedgerEvent
 from app.models.repayment import Repayment
 from app.models.user import User
+from app.notifications import create_notification
 from app.term_calculations import fixed_interest
 from app.terms import project_terms
 
@@ -123,20 +124,19 @@ class RepaymentService:
 
     @staticmethod
     def _events(db, row, terms_id, now, request_id):
-        db.add(
-            LedgerEvent(
-                commitment_id=row.commitment_id,
-                repayment_id=row.id,
-                actor_user_id=row.reported_by_user_id,
-                event_type="REPAYMENT_REPORTED",
-                amount_minor=row.amount_minor,
-                currency=row.currency,
-                terms_version_id=terms_id,
-                occurred_at=now,
-                created_at=now,
-                event_payload={"status": "PENDING_VERIFICATION"},
-            )
+        event = LedgerEvent(
+            commitment_id=row.commitment_id,
+            repayment_id=row.id,
+            actor_user_id=row.reported_by_user_id,
+            event_type="REPAYMENT_REPORTED",
+            amount_minor=row.amount_minor,
+            currency=row.currency,
+            terms_version_id=terms_id,
+            occurred_at=now,
+            created_at=now,
+            event_payload={"status": "PENDING_VERIFICATION"},
         )
+        db.add(event)
         db.add(
             AuditLog(
                 actor_user_id=row.reported_by_user_id,
@@ -148,6 +148,7 @@ class RepaymentService:
                 metadata_={"request_id": sanitize_request_id(request_id)},
             )
         )
+        create_notification(db, event, db.get(Commitment, event.commitment_id))
 
     @auth_operation
     def create(self, principal, identifier, body, key, *, request_id=None):

@@ -25,6 +25,7 @@ from app.models.enums import CommitmentStatus as State
 from app.models.enums import CommitmentType, ConnectionStatus, UserStatus
 from app.models.ledger_event import LedgerEvent
 from app.models.user import User
+from app.notifications import create_notification
 from app.terms import create_terms
 
 
@@ -74,18 +75,17 @@ class CommitmentService:
     def _events(db, row, actor, name, now, request_id, terms_id=None):
         # State events are not monetary postings. In particular, PROPOSED is
         # unverified; no authoritative balance/repayment calculation exists here.
-        db.add(
-            LedgerEvent(
-                commitment_id=row.id,
-                actor_user_id=actor,
-                event_type=name,
-                terms_version_id=terms_id,
-                amount_minor=None,
-                currency=None,
-                occurred_at=now,
-                event_payload={"status": row.status.value},
-            )
+        event = LedgerEvent(
+            commitment_id=row.id,
+            actor_user_id=actor,
+            event_type=name,
+            terms_version_id=terms_id,
+            amount_minor=None,
+            currency=None,
+            occurred_at=now,
+            event_payload={"status": row.status.value},
         )
+        db.add(event)
         db.add(
             AuditLog(
                 actor_user_id=actor,
@@ -96,6 +96,7 @@ class CommitmentService:
                 metadata_={"request_id": sanitize_request_id(request_id)},
             )
         )
+        create_notification(db, event, db.get(Commitment, event.commitment_id))
 
     @auth_operation
     def create(self, principal, body, key, *, request_id=None):

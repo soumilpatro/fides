@@ -24,6 +24,7 @@ from app.models.enums import CommitmentStatus, ExtensionStatus, UserStatus
 from app.models.extension_request import ExtensionRequest
 from app.models.ledger_event import LedgerEvent
 from app.models.user import User
+from app.notifications import create_notification
 from app.terms import project_terms
 
 ELIGIBLE = (CommitmentStatus.ACTIVE, CommitmentStatus.PARTIALLY_REPAID)
@@ -161,19 +162,18 @@ class ExtensionService:
         )
         if status == "ACCEPTED":
             details["terms_version_id"] = str(terms_id)
-        db.add(
-            LedgerEvent(
-                commitment_id=row.commitment_id,
-                event_type=name,
-                actor_user_id=actor,
-                terms_version_id=terms_id,
-                amount_minor=None,
-                currency=None,
-                event_payload=details,
-                occurred_at=now,
-                created_at=now,
-            )
+        event = LedgerEvent(
+            commitment_id=row.commitment_id,
+            event_type=name,
+            actor_user_id=actor,
+            terms_version_id=terms_id,
+            amount_minor=None,
+            currency=None,
+            event_payload=details,
+            occurred_at=now,
+            created_at=now,
         )
+        db.add(event)
         db.add(
             AuditLog(
                 actor_user_id=actor,
@@ -185,6 +185,7 @@ class ExtensionService:
                 metadata_={"request_id": sanitize_request_id(request_id)},
             )
         )
+        create_notification(db, event, db.get(Commitment, event.commitment_id))
 
     @auth_operation
     def create(self, principal, identifier, body, key, *, request_id=None):

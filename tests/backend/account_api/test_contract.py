@@ -100,6 +100,7 @@ def test_seven_endpoint_openapi_and_closed_account_models():
                 "/api/v1/commitments",
                 "/api/v1/repayments",
                 "/api/v1/extension-requests",
+                "/api/v1/notifications",
             )
         )
         for method in item
