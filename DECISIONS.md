@@ -5889,3 +5889,405 @@ Do NOT implement:
 - settlement notifications
 - AI-generated notification copy
 - cross-currency aggregation
+
+
+## B12-D0 — Server-Derived Financial Summary Contract
+
+Date: 2026-09-29
+Status: APPROVED founder/product decision
+Scope: B12 bounded server-derived financial summary queries
+
+### 1. Canonical endpoint
+
+GET /api/v1/summary
+
+### 2. Authentication / authority
+
+- authenticated-user only
+- server-derived
+- backend remains authoritative
+- no client-supplied user_id
+- aggregate only commitments where authenticated user is lender or borrower
+
+### 3. Read-only behavior
+
+- no request body
+- no Idempotency-Key requirement
+- no LedgerEvent
+- no AuditLog
+- no NotificationEvent
+- no state mutation
+- no persistent summary/balance table
+- no materialized view
+- no persistent cache
+
+### 4. Explicitly deferred from bounded B12
+
+- GET /api/v1/summary/borrowed
+- GET /api/v1/summary/lent
+- GET /api/v1/summary/upcoming
+- GET /api/v1/summary/overdue
+- upcoming items/counts/totals
+- overdue items/counts/totals
+- next-due fields
+- recent activity/global activity feed
+- generic needs_attention
+- pending-action aggregates
+- frontend integration/F1
+
+These remain separate future/MVP requirements where already specified;
+they are not silently removed.
+
+### 5. Currency contract
+
+Supported currencies:
+- INR
+- USD
+- GBP
+
+Summary returns exactly three currency buckets in deterministic order:
+INR, USD, GBP
+
+Include zero-exposure currencies.
+
+No:
+- FX
+- currency conversion
+- base/preferred currency
+- cross-currency aggregation
+- cross-currency netting
+
+Commitment currency remains immutable and authoritative.
+
+### 6. Obligation / outstanding
+
+For one commitment at one evaluation time:
+
+P = original principal
+I = approved interest from current effective TermsVersion
+O = P + I
+V = sum of current VERIFIED repayments
+
+verified_outstanding = O - V
+
+IMPORTANT:
+- do NOT clamp with max(O - V, 0)
+- if V > O, fail safely as authoritative-data inconsistency
+
+SIMPLE_FIXED:
+I = (P * interest_rate_bps + 5000) // 10000
+
+NONE:
+I = 0
+
+Pending, disputed, and cancelled repayments do not reduce verified outstanding.
+
+### 7. Borrowed / lent totals
+
+borrowed_outstanding_minor(currency)
+=
+sum of verified outstanding for included commitments
+where authenticated user is borrower
+
+lent_outstanding_minor(currency)
+=
+sum of verified outstanding for included commitments
+where authenticated user is lender
+
+These represent CURRENT VERIFIED OUTSTANDING,
+not original principal, lifetime volume, or reporting capacity.
+
+### 8. Net position
+
+Per currency:
+
+net_position_minor
+=
+lent_outstanding_minor
+-
+borrowed_outstanding_minor
+
+Net position is display-only derived data.
+
+It must not:
+- merge commitments
+- settle obligations
+- offset repayments operationally
+- change repayment eligibility
+- mutate financial state
+
+### 9. Commitment-state treatment
+
+ACTIVE
+- include current verified outstanding
+
+PARTIALLY_REPAID
+- include current verified outstanding
+
+FULLY_REPAID
+- validate verified outstanding == 0
+- contributes zero
+- inconsistent non-zero or negative result => safe failure
+
+PENDING_CONFIRMATION
+- exclude
+
+REJECTED
+- exclude
+
+CANCELLED
+- exclude
+
+CLOSED
+- unsupported in bounded B12 until approved mutual-settlement/waiver accounting defines its effect
+- encountering an authorized CLOSED commitment => safe SERVICE_UNAVAILABLE
+
+Other legacy/unsupported stored states such as:
+- DRAFT
+- CONFIRMED
+- DISPUTED
+- DEFAULTED
+
+must not be silently interpreted or omitted.
+Encountering them in authorized financial input => safe SERVICE_UNAVAILABLE.
+
+### 10. TermsVersion
+
+Current effective terms =
+highest version_no
+where effective_at <= evaluation_time
+
+Do not select newest-created blindly.
+
+Historical terms do not independently contribute to totals.
+
+B10 accepted extension terms become authoritative immediately.
+Pending/rejected extensions do not alter effective terms.
+
+### 11. No-deadline commitments
+
+- still contribute to borrowed/lent/net financial totals
+- no due/upcoming/overdue classification in bounded B12
+
+### 12. Installment commitments
+
+- whole-commitment verified outstanding contributes exactly once
+- do not add installment amounts on top of total obligation
+- do not infer installment repayment allocation
+- do not infer next unpaid installment
+- do not infer installment overdue status
+
+### 13. Upcoming / overdue
+
+Do not expose either in bounded B12.
+
+Existing B6 timezone/grace/date rules remain authoritative where already approved.
+
+Do not implement:
+- default transitions
+- penalties
+- collections
+- delinquency scoring
+- trust impact
+- installment overdue allocation
+
+### 14. Recent activity
+
+- B9 remains commitment-scoped
+- no new user-level/global activity route in B12
+- do not expose AuditLog
+- do not treat B11 notifications as equivalent financial activity
+
+### 15. Exact response shape
+
+```json
+{
+  "currencies": [
+    {
+      "currency": "INR",
+      "borrowed_outstanding_minor": 0,
+      "lent_outstanding_minor": 0,
+      "net_position_minor": 0
+    },
+    {
+      "currency": "USD",
+      "borrowed_outstanding_minor": 0,
+      "lent_outstanding_minor": 0,
+      "net_position_minor": 0
+    },
+    {
+      "currency": "GBP",
+      "borrowed_outstanding_minor": 0,
+      "lent_outstanding_minor": 0,
+      "net_position_minor": 0
+    }
+  ]
+}
+```
+
+
+Closed schema:
+- root contains only currencies
+- currencies required/non-null
+- exactly three entries
+- fixed INR/USD/GBP order
+- each entry has exactly:
+  currency
+  borrowed_outstanding_minor
+  lent_outstanding_minor
+  net_position_minor
+- no null monetary values
+- no floating-point money
+- borrowed/lent non-negative
+- net signed
+- no additional properties
+
+### 16. Aggregate numeric representation
+
+Use JSON integers.
+
+All returned monetary aggregates must fit JavaScript safe integer range:
+
+-(2^53 - 1) <= value <= (2^53 - 1)
+
+Borrowed/lent remain non-negative.
+Net may be signed.
+
+If aggregate exceeds safe-integer range:
+- return safe 503 SERVICE_UNAVAILABLE
+- do not round
+- do not truncate
+- do not emit imprecise JSON numbers
+
+### 17. Query contract
+
+GET /api/v1/summary
+
+- no body
+- no pagination
+- no supported query parameters
+- unknown query parameter => 422 VALIDATION_ERROR
+- no Idempotency-Key requirement
+
+### 18. Success / headers
+
+200 on success.
+
+Preserve existing API conventions including:
+- Cache-Control: no-store
+- sanitized X-Request-ID
+- existing Bearer / WWW-Authenticate behavior
+
+### 19. Authorization / privacy
+
+- only authenticated actor's financial participation
+- connection membership alone grants no access
+- blocked/removed connection does not erase existing financial participation
+- do not exclude financial records merely because counterparty is deactivated
+- actor deactivation follows existing B2 auth/session behavior
+
+Response must not expose:
+- counterparty identity
+- phone
+- notes
+- descriptions
+- individual commitment IDs
+- repayment details
+- extension reasons
+- ledger payloads
+- audit data
+- notification data
+
+### 20. Consistency
+
+One response must be internally coherent.
+
+Approved technical approach:
+- authenticate/revalidate actor
+- retain existing actor User lock
+- capture one evaluation time
+- load authorized financial inputs consistently
+- batch current TermsVersions
+- batch repayment aggregates
+- calculate/validate summary
+- do not lock every commitment solely for summary reads
+
+Do not call helpers outside their documented lock preconditions.
+
+Concurrency tests must prove behavior against current compliant writers.
+
+### 21. Calculation implementation rule
+
+Reuse/refactor authoritative financial calculation logic as necessary.
+
+Do not duplicate independent formulas for:
+- fixed interest
+- obligation
+- verified repayment accounting
+- outstanding
+- currency validation
+
+LedgerEvent is not the financial calculation authority.
+
+### 22. Corruption handling
+
+Do not silently skip corrupt authorized records.
+
+Return safe 503 SERVICE_UNAVAILABLE for:
+- missing current terms
+- unsupported currency
+- repayment currency mismatch
+- invalid reporter/association
+- V > O
+- invalid principal
+- inconsistent FULLY_REPAID state
+- unsupported commitment state
+- aggregate overflow
+- other authoritative-data corruption covered by existing safe error conventions
+
+No partial summary.
+
+### 23. Error contract
+
+Use existing mappings:
+
+- missing auth -> 401 AUTH_REQUIRED
+- invalid token -> 401 INVALID_AUTH_TOKEN
+- expired token -> 401 AUTH_TOKEN_EXPIRED
+- revoked session -> 401 SESSION_REVOKED
+- inactive/unavailable actor -> existing B2 mapping
+- unsupported query parameter -> 422 VALIDATION_ERROR
+- corrupt authoritative financial data -> 503 SERVICE_UNAVAILABLE
+- database unavailable -> 503 SERVICE_UNAVAILABLE
+- unexpected uncaught exception -> existing 500 INTERNAL_ERROR
+
+No new B12-specific public error codes.
+
+### 24. Persistence / infrastructure
+
+Bounded B12 requires:
+- no migration
+- no new index
+- no summary table
+- no materialized view
+- no persistent cache
+- no new dependency
+
+Do not add speculative performance infrastructure without evidence.
+
+### 25. Explicit exclusions
+
+Do NOT include:
+- settlement/waiver implementation
+- installment repayment allocation
+- default transitions
+- penalties
+- collections
+- trust/risk scoring
+- FX
+- cross-currency aggregation
+- reminders
+- notification preferences
+- push
+- frontend DTOs
+- F1 work
