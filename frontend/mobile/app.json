@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "Fides Foundation",
+    "slug": "fides-foundation",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light"
+  }
+}

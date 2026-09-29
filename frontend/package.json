@@ -1,0 +1,22 @@
+{
+  "name": "fides-frontend",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "web",
+    "mobile"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "web": "npm run dev --workspace=@fides/web",
+    "mobile": "npm run start --workspace=@fides/mobile",
+    "lint": "eslint web shared",
+    "typecheck": "npm run typecheck --workspaces",
+    "build:web": "npm run build --workspace=@fides/web"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
+}
