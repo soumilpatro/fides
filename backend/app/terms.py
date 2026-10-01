@@ -86,7 +86,10 @@ def create_terms(db, commitment, supplied, now):
     return row
 
 
-def project_terms(db, row, commitment):
+def validate_terms(row, commitment):
+    """Validate stored terms without I/O; callers provide a consistent financial snapshot."""
+    if row.commitment_id != commitment.id:
+        raise ValueError("Terms belong to another commitment")
     if row.created_by_user_id not in (commitment.borrower_user_id, commitment.lender_user_id):
         raise ValueError("Terms creator is not a participant")
     metadata = row.schedule_definition
@@ -118,6 +121,11 @@ def project_terms(db, row, commitment):
     )
     if row.version_no < 1 or (metadata and metadata["schedule_mode"] != logical.schedule_mode):
         raise ValueError("Invalid version or schedule mode")
+    return logical, timezone
+
+
+def project_terms(db, row, commitment):
+    logical, timezone = validate_terms(row, commitment)
     creator = db.execute(
         select(User.id, User.display_name).where(User.id == row.created_by_user_id)
     ).one()

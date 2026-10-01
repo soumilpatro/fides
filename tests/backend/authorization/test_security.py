@@ -104,6 +104,7 @@ def test_b2_surface_unchanged_with_b4_connections():
                 "/api/v1/repayments",
                 "/api/v1/extension-requests",
                 "/api/v1/notifications",
+                "/api/v1/summary",
             )
         )
         for method in item

@@ -109,6 +109,7 @@ class RequestCorrelationMiddleware(BaseHTTPMiddleware):
                 "/api/v1/repayments",
                 "/api/v1/extension-requests",
                 "/api/v1/notifications",
+                "/api/v1/summary",
             )
         ):
             response.headers["Cache-Control"] = "no-store"

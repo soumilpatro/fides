@@ -5,7 +5,6 @@ All future writers affecting terms or repayment capacity must share that parent
 lock. Pending capacity is distinct from verified outstanding; neither is stored.
 """
 
-from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -19,6 +18,7 @@ from app.commitments import CommitmentService
 from app.core.errors import AuthError, FinancialError, ResourceUnavailable
 from app.core.logging import sanitize_request_id
 from app.core.validation import normalize_timezone
+from app.financial_calculations import accounting
 from app.idempotency import Idempotency
 from app.models.audit_log import AuditLog
 from app.models.commitment import Commitment
@@ -28,16 +28,7 @@ from app.models.ledger_event import LedgerEvent
 from app.models.repayment import Repayment
 from app.models.user import User
 from app.notifications import create_notification
-from app.term_calculations import fixed_interest
 from app.terms import project_terms
-
-
-@dataclass(frozen=True)
-class Capacity:
-    obligation: int
-    verified_outstanding: int
-    pending: int
-    reportable_remaining: int
 
 
 def repayment_accounting(db, commitment, now):
@@ -54,10 +45,6 @@ def repayment_accounting(db, commitment, now):
     if terms is None:
         raise ValueError("No current effective terms")
     project_terms(db, terms, commitment)
-    principal = commitment.principal_amount_minor
-    if not 0 < principal <= 1_000_000_000_000:
-        raise ValueError("Invalid persisted principal")
-    obligation = principal + fixed_interest(principal, terms.interest_rate_bps)
     sums = dict(
         db.execute(
             select(Repayment.status, func.sum(Repayment.amount_minor))
@@ -77,13 +64,7 @@ def repayment_accounting(db, commitment, now):
         )
         .limit(1)
     )
-    verified = int(sums.get(RepaymentStatus.VERIFIED, 0))
-    pending = int(sums.get(RepaymentStatus.PENDING_VERIFICATION, 0))
-    if invalid is not None or verified > obligation:
-        raise ValueError("Inconsistent persisted repayment capacity")
-    return terms.id, Capacity(
-        obligation, obligation - verified, pending, obligation - verified - pending
-    )
+    return terms.id, accounting(commitment, terms, sums, invalid is not None)
 
 
 def reporting_capacity(db, commitment, now):

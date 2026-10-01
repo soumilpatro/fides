@@ -27,6 +27,7 @@ from app.api.ledger import router as ledger_router
 from app.api.me import router as me_router
 from app.api.notifications import router as notifications_router
 from app.api.repayments import router as repayments_router
+from app.api.summary import router as summary_router
 from app.api.terms import router as terms_router
 from app.api.verification import router as verification_router
 from app.config import get_settings
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(ledger_router)
     app.include_router(extensions_router)
     app.include_router(notifications_router)
+    app.include_router(summary_router)
 
     return app
 
