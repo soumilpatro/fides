@@ -1,5 +1,5 @@
-// Closed F1/F2/F3/F4 transport relay. No cookie session or credential store.
-import { isAllowedApiRoute } from "@fides/shared/api/relay";
+// Closed F1–F5 transport relay. No cookie session or credential store.
+import { isAllowedApiRoute, isAllowedApiQuery } from "@fides/shared/api/relay";
 export const dynamic = "force-dynamic";
 async function relay(request: Request, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
@@ -9,6 +9,7 @@ async function relay(request: Request, context: { params: Promise<{ path: string
   const failure = (status: number, code: string, message: string) => Response.json({ error: { code, message } },
     { status, headers: { "Cache-Control": "no-store", "X-Request-ID": requestId } });
   if (!allowed) return failure(404, "NOT_FOUND", "Unavailable resource.");
+  if (!isAllowedApiQuery(path, new URL(request.url).searchParams)) return failure(422, "VALIDATION_ERROR", "Invalid request.");
   const base = process.env.FIDES_BACKEND_API_URL;
   if (!base) return failure(503, "SERVICE_UNAVAILABLE", "Service is temporarily unavailable.");
   try {

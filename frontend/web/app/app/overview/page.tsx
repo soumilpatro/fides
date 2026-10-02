@@ -1,2 +1,3 @@
 import { CommitmentsList } from "../../../features/commitments/Commitments";
-export default function Page() { return <CommitmentsList />; }
+import { Summary } from "../../../features/dashboard/Dashboard";
+export default function Page(){return <div className="commitments-feature"><h1>Overview</h1><Summary/><CommitmentsList dashboard/></div>;}

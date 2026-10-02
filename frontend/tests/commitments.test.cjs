@@ -79,7 +79,7 @@ test("missing current terms rejected; future version is not selected",()=>{
 });
 for(const suffix of ["","/"+ID,"/"+ID+"/terms","/"+ID+"/installments"])test("GET relay "+suffix,()=>assert.equal(isAllowedApiRoute("GET",("commitments"+suffix).split("/")),true));
 for(const suffix of ["","/"+ID+"/confirm","/"+ID+"/reject","/"+ID+"/cancel"])test("POST relay "+suffix,()=>assert.equal(isAllowedApiRoute("POST",("commitments"+suffix).split("/")),true));
-for(const [method,suffix] of [["GET","/"+ID+"/extension-requests"],["POST","/"+ID+"/settlement"],["GET","/"+ID+"/ledger"],["POST","/"+ID+"/extension-requests"],["GET","/../me"],["GET","/%2e%2e"],["DELETE","/"+ID],["POST","/"+ID],["GET","/bad"],["GET","/"+ID+"/terms/extra"]])
+for(const [method,suffix] of [["GET","/"+ID+"/extension-requests"],["POST","/"+ID+"/settlement"],["POST","/"+ID+"/ledger"],["POST","/"+ID+"/extension-requests"],["GET","/../me"],["GET","/%2e%2e"],["DELETE","/"+ID],["POST","/"+ID],["GET","/bad"],["GET","/"+ID+"/terms/extra"]])
  test("relay denied "+method+suffix,()=>assert.equal(isAllowedApiRoute(method,("commitments"+suffix).split("/")),false));
 test("actual relay preserves write key and safe headers, rejects duplicates; other routes do not forward key",async t=>{
  const old=Module._load;Module._load=function(request,parent,main){return old.call(this,request.startsWith("@fides/shared/")?path.join(__dirname,"../shared",request.slice(14)+".ts"):request,parent,main);};

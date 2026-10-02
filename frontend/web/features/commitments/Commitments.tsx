@@ -10,14 +10,15 @@ import { commitmentRole, counterparty, currentTerms, proposalActions, proposalCo
 import { otherParticipant } from "@fides/shared/connections/model";
 import { Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, StatusChip, TextField } from "../../components/ui";
 import { useCommitments } from "./useCommitments";
+import { History } from "../dashboard/Dashboard";
 import { RepaymentsSection } from "../repayments/Repayments";
 import { useAuth } from "../auth/useAuth";
 function Feedback({ error, busy }: { error: string | null; busy: boolean }) {
   return <>{error && <ErrorState message={error} />}{busy && <LoadingState message="Loading the authoritative record…" />}</>;
 }
-export function CommitmentsList() {
+export function CommitmentsList({dashboard=false}:{dashboard?:boolean}) {
   const data = useCommitments();
-  return <div className="commitments-feature"><header className="section-heading"><div><p className="eyebrow">Shared records</p><h1>Commitments</h1></div>
+  return <div className="commitments-feature"><header className="section-heading"><div><p className="eyebrow">Shared records</p>{dashboard?<h2>Commitments</h2>:<h1>Commitments</h1>}</div>
     <Link className="button button--primary" href="/app/commitments/new">Create commitment</Link></header>
     <Button variant="quiet" disabled={data.busy} onClick={() => void data.refresh()}>Refresh commitments</Button>
     <Feedback error={data.error} busy={data.busy} />
@@ -110,7 +111,7 @@ export function CommitmentDetail({ id }: { id: string }) {
       {data.data?.installments && <Card title="Installment schedule">{data.data.installments.map(item => <div key={item.id} className="installment-display">
         <h3>Installment {item.sequence_no} · {item.due_date}</h3><StatusChip label={item.status.replaceAll("_"," ")} />
         <dl className="commitment-facts"><dt>Principal</dt><dd>{formatMoney(item.principal_amount_minor,item.currency)}</dd><dt>Interest</dt><dd>{formatMoney(item.interest_amount_minor,item.currency)}</dd><dt>Total due</dt><dd>{formatMoney(item.total_due_minor,item.currency)}</dd></dl></div>)}</Card>}
-      <RepaymentsSection id={row.id}/>
+      <RepaymentsSection id={row.id}/><History key={row.id} id={row.id}/>
       <div className="button-row">{proposalActions(row,data.userId).map(action => {
         const pending = data.pending(action);
         return <Button key={action} disabled={data.busy || data.actionBlocked(action) || !data.data?.terms || !!pending?.blocked || !!pending?.needsReconcile}

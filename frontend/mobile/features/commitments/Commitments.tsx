@@ -9,11 +9,12 @@ import { commitmentRole, counterparty, currentTerms, proposalActions, proposalCo
 import { otherParticipant } from "@fides/shared/connections/model";
 import { Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Screen, StatusChip, TextField, Title } from "../../components/ui";
 import { useCommitments } from "./useCommitments";
+import { Summary, History } from "../dashboard/Dashboard";
 import { RepaymentsSection, ReportRepayment, RepaymentDetail } from "../repayments/Repayments";
 import { useAuth } from "../auth/useAuth";
 type Destination = { page: "list" } | { page: "new"; connection?: string } | { page: "detail"; id: string } | {page:"report";id:string} | {page:"repayment";id:string;parent:string};
-export function Commitments({ initialConnection, onConnections }: { initialConnection?: string; onConnections: () => void }) {
-  const [destination, setDestination] = useState<Destination>(() => initialConnection ? { page: "new", connection: initialConnection } : { page: "list" });
+export function Commitments({ initialConnection, initialCreate=false, onConnections }: { initialConnection?: string; initialCreate?: boolean; onConnections: () => void }) {
+  const [destination, setDestination] = useState<Destination>(() => initialConnection || initialCreate ? { page: "new", connection: initialConnection } : { page: "list" });
   const back = () => setDestination({page:"list"});
   if(destination.page === "report")return <ReportRepayment key={destination.id} id={destination.id} onBack={()=>setDestination({page:"detail",id:destination.id})} onDetail={id=>setDestination({page:"repayment",id,parent:destination.id})}/>;
   if(destination.page === "repayment")return <RepaymentDetail key={destination.id} id={destination.id} onBack={()=>setDestination({page:"detail",id:destination.parent})}/>;
@@ -26,7 +27,7 @@ function Feedback({ error, busy }: { error: string | null; busy: boolean }) {
 }
 function CommitmentsList({ onNew, onDetail }: { onNew: () => void; onDetail: (id:string) => void }) {
   const data = useCommitments();
-  return <Screen><Title>Commitments</Title><Button title="Create commitment" onPress={onNew} />
+  return <Screen><Title>Home</Title><Summary/><Card title="Commitments"><Button title="Create commitment" onPress={onNew} /></Card>
     <Button title="Refresh commitments" variant="quiet" disabled={data.busy} onPress={() => void data.refresh()} /><Feedback error={data.error} busy={data.busy} />
     {data.data?.rows.length === 0 && <EmptyState title="No commitments yet" message="Create a shared record with someone you're connected to." />}
     {data.data?.rows.map(row => <Card key={row.id}><PersonRow name={counterparty(row,data.userId)!.display_name} role={"You are the " + commitmentRole(row,data.userId)!.toLowerCase()} />
@@ -109,7 +110,7 @@ function CommitmentDetail({ id, onBack, onReport, onRepayment }: { id: string; o
         <Body>Installment {item.sequence_no} · {item.due_date}</Body><StatusChip label={item.status.replaceAll("_"," ")} />
         <Body>Principal: {formatMoney(item.principal_amount_minor,item.currency)}</Body><Body>Interest: {formatMoney(item.interest_amount_minor,item.currency)}</Body><Body>Total due: {formatMoney(item.total_due_minor,item.currency)}</Body>
       </View>)}</Card>}
-      <RepaymentsSection id={row.id} onReport={onReport} onDetail={onRepayment}/>
+      <History key={row.id} id={row.id} onRepayment={onRepayment}/><RepaymentsSection id={row.id} onReport={onReport} onDetail={onRepayment}/>
       {proposalActions(row,data.userId).map(action => {const pending = data.pending(action); return <Button key={action}
         title={pending ? "Retry same " + action : {confirm:"Confirm commitment",reject:"Reject proposal",cancel:"Cancel proposal"}[action]}
         disabled={data.busy || data.actionBlocked(action) || !data.data?.terms || !!pending?.blocked || !!pending?.needsReconcile} onPress={() => setConfirmation(action)} />;})}
