@@ -1,35 +1,34 @@
-# Fides frontend — F0
+# Fides frontend — F1
 
-Two presentation clients, one authoritative FastAPI backend. This batch contains
-only the app shells, separate platform primitives, and a foundation preview.
-The preview makes **no backend requests** and uses no stored session or product data.
+Separate Next.js and Expo clients implement phone OTP authentication against the
+existing B2 contract. No product/financial screens are implemented. Backend B12
+remains server-only; B13 is a separate branch and is not used here.
 
 ## Structure
 
 ```text
-frontend/
-  package.json, package-lock.json, eslint.config.mjs
-  shared/
-    tokens/       approved colors, spacing, radii, typography
-    api/          CurrentUser DTO, errors, request primitive
-    domain/       display-only money formatting and status vocabulary
-  web/
-    app/          Next.js root layout, preview page, global CSS
-    components/   independent DOM ui/ and shell/
-    features/auth/session/  controlled auth context and storage interface
-    api/          environment-bound client factory
-  mobile/
-    index.ts, app.json
-    app/          Expo root and foundation screen
-    navigation/   single-screen root (no product routes)
-    components/   independent React Native ui/ and shell/
-    features/auth/session/  controlled auth context and storage interface
-    api/          environment-bound client factory
+shared/
+  api/             typed auth DTOs, errors, request client
+  auth/            pure serialized session coordinator and flow helpers
+  tokens/          approved brand/layout/type and semantic status tokens
+web/
+  app/             welcome, signup, login, guarded app destinations
+  app/api/v1/      allowlisted transparent auth transport relay
+  app/dev/         development-only F0 foundation preview
+  features/auth/   DOM auth flow, context, guard, memory SessionStore
+mobile/
+  features/auth/   React Native auth flow, context, SecureStore SessionStore
+  navigation/      welcome/auth and four-destination shell
+  app/             font bootstrap and preserved development F0 preview
+ tests/            Node auth tests; isolated auth-only visual fixture
 ```
 
-## Install and run
+Only tokens, API types/errors and pure logic are shared. UI, navigation,
+accessibility and credential storage remain separate for each platform.
 
-Use Node 24 LTS and npm 11 or newer. From `frontend/`:
+## Run against the local backend
+
+Use Node 24 LTS and the existing npm workspace lockfile. From `frontend/`:
 
 ```sh
 npm ci
@@ -37,111 +36,145 @@ npm run web
 npm run mobile
 ```
 
-Web: http://localhost:3000. Mobile: Expo Metro, then open with a compatible
-SDK 57 Expo Go/development client on Android or iOS. Press `a` for a configured
-Android emulator; iOS Simulator requires macOS. No app icon has been selected.
-For Expo's browser-based **mobile component preview** (not the Fides web app):
+Use the repository's existing, initialized local development PostgreSQL database
+and backend environment. From `backend/`, with the repository virtual environment:
+
+```sh
+../.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-proxy-headers --no-access-log
+```
+
+For local authentication the backend must already have an enabled, correctly
+configured OTP provider and HMAC secret (see `backend/.env.example`). Existing
+local fake-provider codes are signup `123456`, login `654321`; never enable the
+fake provider in staging/production. F1 does not apply migrations or change backend
+configuration. An empty database cannot serve authentication.
+
+Web configuration (`web/.env.local`, based on `web/.env.example`):
+
+- `NEXT_PUBLIC_API_BASE_URL=/api/v1`
+- `FIDES_BACKEND_API_URL=http://localhost:8000/api/v1`
+
+Next's relay forwards only GET `/me` and POST `auth/otp/request`, `auth/otp/verify`,
+`auth/refresh`, `auth/logout`. It forwards bearer/JSON and safe response headers,
+uses no cookies or server credential storage, disables caching, refuses redirects,
+and never logs bodies. This avoids requiring backend CORS changes. It does not
+forward client-supplied proxy IP headers; deployment proxy/trust policy is a
+separate decision. All browser clients behind it share the backend-visible proxy IP
+budget. Production transport must use HTTPS.
+
+Mobile configuration (`mobile/.env`, based on its `.env.example`):
+
+- `EXPO_PUBLIC_API_BASE_URL=http://<development-host>:8000/api/v1`
+
+Physical devices cannot reach the computer via `localhost`; use a reachable local
+host with backend binding/firewall configured for development. No credentials go
+in public frontend configuration. Use SDK 57-compatible Expo Go/development client.
+iOS Simulator requires macOS; browser Expo preview is supplemental:
 
 ```sh
 npm run start --workspace=@fides/mobile -- --web --localhost --port 8081
 ```
 
-For CLI options, target a workspace directly (one level of npm argument forwarding):
+The browser Expo preview requires an API with approved CORS routing; native Expo
+requests do not have this browser restriction. No backend CORS patch is included.
 
-```sh
-npm run dev --workspace=@fides/web -- --hostname 127.0.0.1
-```
+## Authentication and sessions
 
-## Environment
+Request: `{ intent: "signup" | "login", phone }` → server challenge UUID, expiry,
+resend delay. Backend validation/normalization is authoritative. Signup collects
+six-digit code temporarily in memory, then display name and a reviewable runtime-
+derived IANA timezone. No invented timezone fallback. Final verify sends exactly
+`{ challenge_id, code, display_name, timezone }`. Login sends only
+`{ challenge_id, code }`. No password/email/social authentication.
 
-No environment variables or running backend are required for the preview.
-When a later approved feature constructs an API client, copy the corresponding
-`.env.example` into `web/.env.local` or `mobile/.env` and set:
+The unchanged credential response is projected to the five existing credential
+fields. GET `/me` must succeed before protected UI appears; cached response user is
+not authoritative. Loading, anonymous and authenticated states are explicit.
+Backend expiry, resend delay, safe errors and numeric `Retry-After` are respected.
+No automatic OTP retries. Auth transport has a 15-second client deadline to avoid
+indefinite verification/restoration/logout spinners; it does not change provider
+leases, OTP validity, rate limits or backend cooldowns.
 
-- Web: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1`
-- Mobile: `EXPO_PUBLIC_API_BASE_URL=http://<development-host>:8000/api/v1`
+Native credentials use **expo-secure-store ~57.0.4**, one whole JSON credential
+record with `WHEN_UNLOCKED_THIS_DEVICE_ONLY`, behind SessionStore. The native config
+plugin excludes its records from Android backup and does not request Face ID.
+No AsyncStorage,
+plain files or persisted user/OTP state. Native-device keychain behavior still
+requires device verification. Expo web preview uses memory, not native SecureStore.
+Web also uses memory only: full reload returns to anonymous, including direct
+protected URLs. No localStorage/sessionStorage/IndexedDB/cookie session. Persistent
+web login awaits an approved secure-cookie/server-session architecture.
 
-A physical device cannot reach the computer through `localhost`; use a reachable
-host address. Production API transport must use HTTPS. These variables are public
-configuration, never secrets. Backend CORS/same-origin deployment configuration is
-not implemented or selected here; no backend configuration is changed for F0.
+Session operations are serialized; concurrent refreshes share one flight. Rotation
+replaces both tokens in one storage write and never reuses the previous refresh
+credential after success. Access expiry triggers refresh in the active session;
+mobile authenticated resume reconciles `/me` without resetting anonymous OTP flows.
+Invalid/expired/revoked credentials clear locally. Transient failure hides protected
+UI and offers explicit recovery/clear actions, without indefinite retries. Logout
+uses bearer access authentication and clears local state even when the network or
+credential is unusable. Storage deletion failure is surfaced for retry.
 
-API factories accept an optional access-token source. Requests are relative to
-the configured `/api/v1` base, serialize JSON, normalize backend error envelopes,
-and accept an optional caller-supplied idempotency key and abort signal. They never
-retry, refresh, log payloads, follow redirects, or persist financial facts.
-Generic TypeScript response types describe wire contracts; they are not runtime
-JSON validation. No product endpoints are invented or called. CurrentUser matches
-checked-in B2 MeResponse, not the superseded register/login sketches in the old spec.
+## Design and navigation
 
-## Sharing and authority
+The approved F0 five brand colors, spacing 4/8/12/16/24/32/40/48/64, radii
+8/12/16/20/999, Manrope/Inter typography hierarchy and 48px controls are retained.
+VERIFIED, PENDING, DISPUTED, OVERDUE and CLOSED now use the supplied exact semantic
+text/background/border colors; StatusChip requires explicit text and accepts an
+optional semantic style. These do not derive server/financial state. No final dark
+palette or additional missing semantic tokens are invented.
 
-Only tokens, DTOs, error/request primitives, and pure display helpers are shared.
-DOM and React Native components, navigation, accessibility, auth contexts and
-session-store interfaces remain platform-specific. No state-management framework,
-UI library, API generator, test framework, or monorepo build system is added.
+Web shell: Overview, Connections, Activity, Notifications, Profile / Settings.
+Mobile: permanent Home, Connections, Activity, Profile tabs, global bell entry for
+Notifications. Create commitment is a contextual disabled future-release action,
+not a fifth tab. Destinations contain placeholders only, without financial data.
 
-Money display accepts safe integer minor units with an explicit currency, rejects
-unsafe values, and formats without aggregating or deriving balances. A reported or
-disputed repayment never means verified. Connections never imply financial access.
-The server owns authorization, calculations, independent commitments, lifecycle,
-repayment allocation and verified outstanding. No B12 response shape is assumed.
+**Final Record Loop production asset missing.** Shared concept is approved, but
+independent Brand components use a text-only FIDES wordmark as the asset insertion
+point. No logo is redrawn. The F0 preview remains `/dev/foundation` on web (404 in
+production) and a development-only entry on mobile.
 
-## Dependencies
+F2+, dashboard/B12 UI, upcoming/overdue/activity calculations, settlement, financial
+workflows, profile editing/deactivation, push, dark mode and frontend analytics are
+excluded.
 
-- Next.js, React, React DOM: web application runtime.
-- Expo, React Native: mobile application runtime; versions follow the official
-  Expo TypeScript template and SDK bundled dependency manifest.
-- expo-font and the Manrope/Inter font asset packages: bundled approved typography,
-  also served locally by Next.js (no runtime Google Fonts requests).
-- expo-status-bar, react-native-safe-area-context: platform status bar and safe areas.
-- react-native-web and matching react-dom in mobile: Expo browser rendering for
-  foundation checks on hosts without a native emulator; no shared UI abstraction.
-- TypeScript and React/Node type packages: strict static checks.
-- ESLint and eslint-config-next: web/shared lint checks.
-- npm workspaces and one lockfile: standard package linking without custom tooling.
-
-## Design source and unresolved items
-
-The five supplied colors and the subsequently supplied layout/type scale are
-approved inputs for this batch. Spacing: 4, 8, 12, 16, 24, 32, 40, 48, 64.
-Chosen category radii: 8 / 12 / 16 / 20 / 999. Type sizes: 32 title, 20 section,
-16 body, 14 supporting, 12 metadata, 11 micro; amounts 40 / 24 / 18. Controls 48.
-Borders define surfaces; shadows are intentionally omitted. Surface currently
-aliases Canvas, avoiding an invented surface color. Responsive widths are layout
-constraints, not additional design-system color or spacing tokens.
-
-Still unresolved:
-
-- semantic status colors (verified/pending/disputed/overdue/closed), muted text and
-  additional surface values: **not invented**; StatusChip is neutral and examples
-  do not imply financial status styling;
-- final dark palette: **not invented**; named tokens make later theming possible;
-- TD-012 web/mobile credential persistence: interfaces only, no adapter,
-  localStorage, SecureStore, cookie policy, session recovery or token refresh;
-- final branding/logo/app icon: **not selected**; text-only FIDES wordmark;
-- native-device visual validation requires a compatible device/emulator;
-- CORS/deployment routing must be approved with the first network feature.
-
-AuthProvider is a controlled state seam (loading/anonymous/authenticated), defaulting
-to anonymous. There is no login, registration, logout request, route guard or
-credential persistence. F1 and all product screens are intentionally absent.
-
-## Validation
+## Validation and isolated visual fixture
 
 ```sh
 npm run lint
 npm run typecheck
+npm run test:auth
 npm run build:web
 npm run config --workspace=@fides/mobile
 cd mobile
 npx expo install --check
-npx expo export --platform android --output-dir dist/android
 npx expo export --platform ios --output-dir dist/ios
 ```
 
-Browser checks cover rendering, input/button/reset behavior, disabled controls,
-keyboard focus and narrow-screen layout. Expo web preview is supplemental and
-must not be presented as Android/iOS device validation. No existing frontend test
-setup was present, so no Jest/Vitest/Storybook framework was introduced. Backend
-isolation is checked via Git; the full backend test suite is not run for F0.
+Tests use Node's built-in runner and the existing TypeScript compiler; no new test
+framework. They cover exact payloads/bearer boundaries, authoritative bootstrap,
+rotation/single flight, invalid credentials, transient recovery, storage failure,
+logout races and safe errors.
+
+When a real backend cannot authenticate, `npm run preview:auth` starts a clearly
+isolated localhost-only fixture on port 8765. It is never imported by application
+code and refuses production mode. Point the web relay and/or Expo public API base
+to `http://127.0.0.1:8765/api/v1` **only for visual validation**. Signup code is
+`123456`; login code `654321`. All state is ephemeral auth-only test data, never
+financial data. Use the live backend instead once it is available.
+
+Current checks: all three workspace typechecks, web/mobile/shared lint, production web
+build, Expo config/boot and iOS Hermes export pass; 25 Node auth tests pass. Manual
+web and phone-size Expo browser reviews cover welcome, signup phone/OTP/profile,
+login phone/OTP, safe auth errors and authenticated shell. Native-device secure
+storage validation remains separate from the Expo browser review.
+
+Live local validation also passes against the existing backend and `fides_dev`,
+after applying existing Alembic migrations through 012. Process-only local settings
+enable the existing fake OTP provider; no backend files or migration sources change.
+Browser signup/login, authoritative `/me` and logout pass. The shared frontend
+session coordinator also passes live refresh rotation, revoked/invalid credentials,
+and expired access/refresh handling using temporary local token lifetimes. Shared
+signup/login cooldowns remain enforced. The fake provider keeps challenge state in
+memory and resets its reference sequence on restart; against retained database
+history, a reused reference can safely fail with 503. Keep a single backend process
+for a live validation sequence. No backend suite is rerun for this frontend-only batch.

@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { formatMoney } from "@fides/shared/domain/money";
+import { statusColors, type SemanticStatus } from "@fides/shared/tokens/index";
 
 export function Button({
   variant = "primary",
@@ -57,9 +58,10 @@ export function Card({
     </section>
   );
 }
-/** A neutral chip until semantic status colors are approved. No financial mapping. */
-export function StatusChip({ label }: { label: string }) {
-  return <span className="chip">{label}</span>;
+/** Presentation only: explicit text carries meaning, never derives a server state. */
+export function StatusChip({ label, status }: { label: string; status?: SemanticStatus }) {
+  const color = status ? statusColors[status] : null;
+  return <span className="chip" style={color ? { color: color.text, background: color.background, borderColor: color.border } : undefined}>{label}</span>;
 }
 export function Avatar({ name }: { name: string }) {
   const initials = name

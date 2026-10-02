@@ -1,9 +1,12 @@
 {
   "expo": {
-    "name": "Fides Foundation",
+    "name": "Fides",
     "slug": "fides-foundation",
     "version": "0.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light"
+    "userInterfaceStyle": "light",
+    "plugins": [
+      ["expo-secure-store", { "configureAndroidBackup": true, "faceIDPermission": false }]
+    ]
   }
 }

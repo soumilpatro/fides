@@ -85,9 +85,14 @@ export function FoundationScreen() {
       <Card title="Meaning before color">
         <Body>Status text always carries the meaning.</Body>
         <Body supporting>
-          Financial status colors await approval. No semantic palette is implied
-          in this preview.
+          Approved semantic colors support explicit labels. These are design
+          specimens, without financial state.
         </Body>
+        <StatusChip label="Verified specimen" status="VERIFIED" />
+        <StatusChip label="Pending specimen" status="PENDING" />
+        <StatusChip label="Disputed specimen" status="DISPUTED" />
+        <StatusChip label="Overdue specimen" status="OVERDUE" />
+        <StatusChip label="Closed specimen" status="CLOSED" />
       </Card>
       <Micro>FEEDBACK SPECIMENS</Micro>
       <LoadingState message="Loading specimen" />
