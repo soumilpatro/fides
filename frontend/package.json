@@ -22,7 +22,10 @@
     "preview:connections": "node tests/connections-preview.cjs",
     "test:commitments": "node --test tests/commitments.test.cjs",
     "test:commitments:live": "node tests/commitments-live.cjs",
-    "preview:commitments": "node tests/commitments-preview.cjs"
+    "preview:commitments": "node tests/commitments-preview.cjs",
+    "test:repayments": "node --test tests/repayments.test.cjs",
+    "test:repayments:live": "node tests/repayments-live.cjs",
+    "preview:repayments": "node tests/repayments-preview.cjs"
   },
   "devDependencies": {
     "typescript": "~6.0.3"

@@ -8,8 +8,13 @@ export function isAllowedApiRoute(method: string, path: string[]) {
     if (path.length === 1) return method === "GET" || method === "POST";
     if (!connectionUuid.test(path[1])) return false;
     if (path.length === 2) return method === "GET";
-    return path.length === 3 && (method === "GET" ? ["terms", "installments"].includes(path[2]) :
-      method === "POST" && ["confirm", "reject", "cancel"].includes(path[2]));
+    return path.length === 3 && (method === "GET" ? ["terms", "installments", "repayments"].includes(path[2]) :
+      method === "POST" && ["confirm", "reject", "cancel", "repayments"].includes(path[2]));
+  }
+  if (path[0] === "repayments") {
+    if (!connectionUuid.test(path[1] ?? "")) return false;
+    if (path.length === 2) return method === "GET";
+    return path.length === 3 && (method === "GET" ? path[2] === "verification-history" : method === "POST" && ["verify","dispute"].includes(path[2]));
   }
   if (path[0] !== "connections") return false;
   if (path.length === 1) return method === "GET" || method === "POST";
