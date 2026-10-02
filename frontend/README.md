@@ -300,3 +300,96 @@ read-only terminal records, terms/schedules, loading and safe recovery errors.
 One focused review fixed opposite-action availability during an unresolved write,
 inconsistent installment snapshots and navigation after feature unmount. The
 visual fixture was also corrected to canonicalize nested JSON property order.
+
+
+## F4 — repayments and verification
+
+F4 starts from merged F3 at origin/main 025dc25ac99e8faa03644c6fef3817e1a3d31cb9,
+in the isolated Fides-F4 worktree on feat/f4-repayments-verification.
+The existing bearer API client now binds reportRepayment, listRepayments,
+getRepayment, verifyRepayment, disputeRepayment and getVerificationHistory.
+The web relay admits only the six exact F4 method/path combinations alongside
+F1–F3. Idempotency-Key is required and forwarded only on approved financial POSTs;
+GETs do not forward it. Cookies and arbitrary proxy headers remain excluded.
+No auth storage or backend contract changes are introduced.
+
+Web commitment detail contains a Repayments section. Report form lives at
+/app/commitments/[id]/repayments/new; repayment detail and history at
+/app/repayments/[id]. Both remain under Overview with the five existing sidebar
+entries. Mobile extends the feature-local Commitment destinations with report
+and repayment-detail views; its four tabs are unchanged. Web and React Native
+rendered UI remain separate. Shared additions contain DTOs, API operations and
+pure form/role/history/error helpers only.
+
+Either current direct participant may report while the authoritative parent is
+ACTIVE or PARTIALLY_REPAID. The form locks currency to the parent, reuses F3
+string/BigInt decimal parsing, validates date-only YYYY-MM-DD and trims optional
+notes to null (maximum 500 Unicode characters). The backend checks future dates
+in the reporter's stored timezone. No payment method/reference/evidence is sent.
+The review distinguishes reporting from verification and states that money
+moves outside Fides. Independent list records retain backend order.
+
+Only the other direct participant may verify/dispute a pending report while the
+parent remains eligible. Confirmations send a JSON object containing only
+optional decision_note (null when blank). PENDING_VERIFICATION, VERIFIED,
+DISPUTED and read-only CANCELLED have explicit textual labels with approved
+semantic tokens. Verification history is read-only and requires coherent parent,
+reporter, currency, decision actor and status references before enabling actions.
+CANCELLED introduces no workflow. Reporting never optimistically changes either
+status; decisions refresh detail, history, list and parent. FULLY_REPAID remains
+distinct from CLOSED. No obligation/outstanding/reservation/FX/interest/allocation
+calculation exists in application frontend code.
+
+Existing in-memory MutationIntents retain actor/resource/action-scoped key and
+canonical normalized payload after uncertain outcomes. Controllers reconcile GETs,
+then permit an explicit same-action/key/payload retry only. Opposite decision
+controls remain disabled until the original outcome resolves. A key conflict
+freezes the original intent. Definitive validation failures allow a new logical
+attempt. Writes are never automatically retried after auth recovery; safe reads
+may recover the session once. Failed reconciliation disables mutation eligibility
+and withholds stale history; malformed successful write responses retain intent.
+Memory intents survive feature remounts inside the current AuthProvider, not
+process restart. Existing web memory-only and mobile secure credentials remain.
+
+Validation from frontend/: npm run test:auth, npm run test:connections,
+npm run test:commitments, npm run test:repayments, npm run test:repayments:live,
+npm run lint, npm run typecheck, npm run build:web,
+npm run config --workspace=@fides/mobile. From frontend/mobile/:
+npx expo install --check; npx expo export --platform ios --output-dir dist/ios.
+The live runner uses only localhost current-main backend from Fides-F4/backend
+and the existing fake provider; three disposable users are logged out finally.
+It covers partial/multiple/final reports, reverse roles, interest, disputes,
+terminal decisions, capacity errors, blocked connection independence, IDOR,
+original-response replay, conflicts and a lost real acknowledgement.
+A verification OVER_REPAYMENT after a later obligation reduction is exercised
+through controller tests and UI fixture, without introducing a terms-amendment
+route solely to create that scenario.
+
+npm run preview:repayments provides a localhost-only ephemeral fixture at 8768
+for UI review. Point process-only relay/Expo base URL to its /api/v1. Login
++12025550101 (Riya) or +12025550104 (Sam), code 654321. Controls
+/__fixture/reset and /__fixture/mode accept mixed/empty, slow, error, network,
+ambiguous, invalid, over and conflict. Fixture financial arithmetic is local
+server test setup only, never imported by application code. It supplements
+separate live-backend validation and refuses NODE_ENV=production.
+
+Zero dependencies added or versions changed. The existing Expo 57.0.25 vs
+~57.0.26 recommendation remains a non-blocking follow-up; no Expo upgrade in F4.
+The final Record Loop asset and physical-device secure-storage review remain
+known separate items. No F5+, extensions, notifications, dashboard/B12 UI,
+ledger/activity, settlement, waiver, closure, payments, installment allocation
+or backend/B14 work is included.
+
+F4 completion validation: 157 focused tests, 25 auth, 68 Connections and 135
+Commitments regressions passed with zero failures/skips. Live validation passed
+68 checks on current-main's migration 012 backend. Lint, all workspace typechecks,
+production web build, Expo config and iOS export passed. Expo install --check
+exits 1 solely for the unchanged 57.0.25 patch recommendation described above.
+Desktop web and phone-size Expo review covered empty/mixed lists, all four
+repayment statuses, report/review/pending success, both reporter directions,
+verify/dispute confirmations and notes, history, uncertain report reconciliation
+and explicit same-key retry, OVER_REPAYMENT/INVALID_STATE, and server-returned
+FULLY_REPAID with the report action removed. The single focused review hardened
+successful-response action/status validation so malformed receipts retain intent,
+and verified failed-refresh action gating and stale-history withholding. Native
+calendar keyboard input and date input/change capture were also validated.
