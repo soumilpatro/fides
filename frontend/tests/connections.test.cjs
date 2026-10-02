@@ -68,7 +68,7 @@ const allowed=[["GET","connections"],["POST","connections"],["GET","connections/
   ...["otp/request","otp/verify","refresh","logout"].map(a=>["POST","auth/"+a])];
 for(const [method,endpoint] of allowed) test("relay allows "+method+" "+endpoint,()=>assert.equal(isAllowedApiRoute(method,endpoint.split("/")),true));
 for(const [method,endpoint] of [["PATCH","connections/"+ID],["DELETE","connections"],["POST","connections/"+ID],
-  ["GET","connections/"+ID+"/accept"],["POST","connections/"+ID+"/unblock"],["GET","commitments"],["GET","summary"],
+  ["GET","connections/"+ID+"/accept"],["POST","connections/"+ID+"/unblock"],["GET","commitments/"+ID+"/repayments"],["GET","summary"],
   ["GET","connections/../me"],["GET","connections/%2e%2e/me"],["GET","connections/"+ID+"/extra"],
   ["GET","connections//"+ID],["POST","auth/../refresh"],["GET","connections/https://x"]])
 test("relay rejects "+method+" "+endpoint,()=>assert.equal(isAllowedApiRoute(method,endpoint.split("/")),false));

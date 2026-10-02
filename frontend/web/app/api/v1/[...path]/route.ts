@@ -1,4 +1,4 @@
-// Closed F1/F2 transport relay. No cookie session or credential store.
+// Closed F1/F2/F3 transport relay. No cookie session or credential store.
 import { isAllowedApiRoute } from "@fides/shared/api/relay";
 export const dynamic = "force-dynamic";
 async function relay(request: Request, context: { params: Promise<{ path: string[] }> }) {
@@ -17,6 +17,11 @@ async function relay(request: Request, context: { params: Promise<{ path: string
     const headers = new Headers({ Accept: "application/json", "X-Request-ID": requestId });
     for (const name of ["Authorization", "Content-Type"]) {
       const value = request.headers.get(name); if (value) headers.set(name, value);
+    }
+    if (request.method === "POST" && path[0] === "commitments") {
+      const key = request.headers.get("Idempotency-Key");
+      if (!key || !/^[A-Za-z0-9._:-]{1,128}$/.test(key)) return failure(400, "MALFORMED_REQUEST", "Invalid request.");
+      headers.set("Idempotency-Key", key);
     }
     const upstream = await fetch(url.href.replace(/\/$/, "") + "/" + endpoint + new URL(request.url).search, {
       method: request.method, headers, body: request.method === "GET" ? undefined : await request.text(),

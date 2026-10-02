@@ -19,7 +19,10 @@
     "preview:auth": "node tests/auth-preview.cjs",
     "test:connections": "node --test tests/connections.test.cjs",
     "test:connections:live": "node tests/connections-live.cjs",
-    "preview:connections": "node tests/connections-preview.cjs"
+    "preview:connections": "node tests/connections-preview.cjs",
+    "test:commitments": "node --test tests/commitments.test.cjs",
+    "test:commitments:live": "node tests/commitments-live.cjs",
+    "preview:commitments": "node tests/commitments-preview.cjs"
   },
   "devDependencies": {
     "typescript": "~6.0.3"
