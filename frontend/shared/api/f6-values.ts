@@ -1,0 +1,12 @@
+import { ApiError } from "./errors";
+import { connectionUuid } from "./connections";
+import type { Person } from "./commitments";
+export const invalidResponse = (): never => { throw new ApiError("INVALID_RESPONSE","Unable to read the server response.",null); };
+export const object = (v:unknown):Record<string,unknown> => v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:invalidResponse();
+export const text = (v:unknown):string => typeof v==="string"?v:invalidResponse();
+export const uuid = (v:unknown):string => typeof v==="string"&&connectionUuid.test(v)?v:invalidResponse();
+export const stamp = (v:unknown):string => typeof v==="string"&&/T.*(?:Z|\+00:00)$/.test(v)&&Number.isFinite(Date.parse(v))?v:invalidResponse();
+export const person = (v:unknown):Person => {const p=object(v);return {id:uuid(p.id),display_name:text(p.display_name)};};
+export const array = (v:unknown):unknown[] => Array.isArray(v)?v:invalidResponse();
+export const key = (v:string) => {if(!/^[A-Za-z0-9._:-]{1,128}$/.test(v))throw new ApiError("MALFORMED_REQUEST","Invalid request.",400);return v;};
+export const identifier = (v:string) => {if(!connectionUuid.test(v))throw new ApiError("NOT_FOUND","Unavailable resource.",404);return v;};

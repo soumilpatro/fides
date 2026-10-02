@@ -487,3 +487,131 @@ The focused review corrected routing guards to validate pathname separately from
 opaque query data; traversal/auth transport regressions remain green. No full
 backend suite was run solely for F5. npm ci reported 12 findings in the unchanged
 lockfile (8 moderate, 4 high); no dependency remediation was bundled with F5.
+
+
+## F6 — Extensions, notifications, and Profile / Settings
+
+F6 starts from merged F5 commit 16600006d2bb67282138a0b1b9335e8877307687 in
+the isolated Fides-F6 worktree on feat/f6-mvp-completion. B14 is not a dependency.
+
+Due-date extensions use only the merged single-date contract: GET/POST
+/commitments/{id}/extension-requests and POST /extension-requests/{id}/accept
+or /reject. Either participant may request on ACTIVE/PARTIALLY_REPAID single-date
+terms when no REQUESTED row exists. Roles use requested_by and authenticated /me.
+The other participant may reject even when the commitment no longer permits
+acceptance. Historical CANCELLED is read-only; no cancellation or general
+terms editing is introduced. Request date/reason are reviewed before submission.
+Accept/reject send {} and have explicit web modal/native sheet confirmations.
+All three writes use existing MutationIntents. An uncertain outcome retains
+the original action, key and normalized payload, freezes changed/opposite
+operations, and rereads requests/terms/parent before any explicit same-intent
+retry. Definitive CONFLICT releases the failed intent after reconciliation;
+a stale acceptance displays the approved terms-changed warning without replay.
+Acceptance refreshes current commitment/terms and mounted F5 history. The
+frontend never constructs terms versions or optimistically changes due dates.
+
+Notifications use GET /notifications?limit=50[&cursor=opaque] with server
+created_at DESC/id DESC order; Load more appends in that order and Refresh
+restarts at page one. POST /notifications/{id}/read sends {} without a key,
+only after intentional activation. Returned read_at is authoritative; a read
+failure leaves unread styling intact and still permits target navigation.
+Commitment events open Commitment Detail, repayment events open existing
+Repayment Detail, and extension events open commitment extension context.
+All ten merged types use actor/action copy only. No financial amounts, reasons,
+profile fields or fabricated payloads appear in notifications. No numeric
+global unread count is inferred from partially loaded pages.
+
+Profile reuses F1's authoritative GET /me. Phone is read-only. PATCH /me sends
+only changed display_name/timezone fields (one or both, never null).
+A returned MeResponse reconciles the same authenticated user's state without
+changing credentials. Timezone is an explicit IANA entry; web provides
+browser-supported suggestions. Device timezone never replaces the server value.
+Account actions are existing Logout and POST /me/deactivate with {} and no key.
+The final destructive action requires exactly DEACTIVATE locally, case and
+whitespace sensitive; this confirmation text is never transmitted. Authoritative
+unresolved-commitment refusal is shown with Back to commitments. Only server
+success clears local credentials and exits the protected shell. Web tokens
+remain memory-only; mobile continues the existing SecureStore abstraction.
+
+Web retains Overview, Connections, Activity, Notifications, Profile / Settings.
+Only /app/notifications, /app/profile and the bounded
+/app/commitments/[id]/extensions/new route are added. The same closed relay
+adds only the eight approved F6 method/routes; extension POSTs require validated
+Idempotency-Key, account/read writes do not forward it. Notifications allow
+only limit/cursor; extension/account operations deny query parameters. Cookies,
+proxy identity headers and arbitrary client headers remain excluded.
+Mobile retains Home, Connections, Activity, Profile; the header's text
+Notifications shortcut opens the inbox, with bounded existing record targets.
+There is no fifth tab, extension tab or notification-detail screen.
+
+Frozen Frontend Polish D0 applies to these new surfaces: approved brand and
+semantic tokens, spacing/radii, named statuses, restrained destructive styling,
+48px controls, visible focus, web focus trap/restore, native decision sheets
+and full-screen forms, and reduced-motion-compatible restrained interactions.
+Icon selection remains deferred; no icon dependency or production emoji is added.
+The authoritative Record Loop production asset remains unavailable; FIDES text
+fallback is retained, with no approximation.
+
+No mutual closure, settlement, waiver, unilateral closure, account-level
+Upcoming/Overdue/Needs attention, notification preferences, reminders, push,
+Trust Score, AI, payments, community funding, email/password/social auth,
+dark mode, B14 behavior or F7 is implemented. Future Mutual Closure design
+wording remains frozen as "Closed by mutual agreement", with separate
+"Verified repayments" and "Waived amount" presentation; this is documentation
+only, not a frontend/backend workflow.
+
+Validation commands:
+- npm run test:extensions
+- npm run test:notifications
+- npm run test:profile
+- all existing test:auth/connections/commitments/repayments/dashboard
+- npm run lint; npm run typecheck; npm run build:web
+- mobile: npx expo config --type public; npx expo install --check
+- mobile: npx expo export --platform ios --output-dir dist/ios
+
+Local-only preview: npm run preview:mvp starts port 8770, web on 3006
+with FIDES_BACKEND_API_URL=http://127.0.0.1:8770/api/v1, native web on 8086
+with EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8770/api/v1. Fixture login
++12025550101 (Riya) or +12025550104 (Sam), code 654321. The fixture is
+never imported by application code and refuses production mode.
+
+npm run test:mvp:live validates only the unchanged merged backend launched
+from Fides-F6/backend on 8000, existing fides_dev PostgreSQL on 5433,
+migration 012, existing fake OTP and process-only development secrets.
+No backend/configuration/migration change or Twilio contact is required.
+It creates disposable accounts and reports assertion counts only, never tokens.
+Fake provider operation references restart per process; bounded disposable
+requests may encounter retained dev-reference collisions before issuing a new
+challenge. This is a local fixture limitation, not a production provider change.
+Live checks: extensions 20, notifications 12, profile 9. Stale base acceptance
+cannot naturally be induced via public APIs while enforcing one pending request;
+it is covered by controller tests and local visual conflict mode.
+
+Known inherited non-blocking items remain: Expo 57.0.25 versus recommended
+~57.0.26 (no F6 upgrade), 12 audit findings in the unchanged lockfile
+(8 moderate/4 high), final Record Loop asset, and native physical-device
+SecureStore/keyboard/screen-reader validation. Web/Expo browser checks do
+not claim physical-device validation. No full backend suite is run solely for F6.
+
+Final F6 validation (2026-10-02): extensions 76, notifications 67, profile 19;
+162 focused F6 tests. F1 auth 25, F2 connections 68, F3 commitments 135,
+F4 repayments 157, F5 dashboard/activity 145. Total 692 passed, zero failed
+and zero skipped. Lint, shared/web/mobile typechecks, production web build,
+Expo public config and final iOS export pass. git diff --check passes.
+No dependencies or lockfile changed.
+
+Focused review fixed two in-scope defects: a definitive rolled-back 409
+CONFLICT now releases its extension intent so rejecting a stale request remains
+available; ambiguous outcomes still preserve the original key and body. Web
+confirmation dialogs explicitly cycle Tab/Shift+Tab and restore opener focus.
+Controller regression and production browser checks cover both fixes.
+
+Visual review used separate web and Expo browser implementations: desktop,
+tablet and small-phone layouts, long display names, historical extension states,
+request/review, recipient decisions, stale-terms conflict, profile save, exact
+typed confirmation, unresolved refusal and successful deactivation, notification
+empty/read/unread states and existing repayment navigation. Production small
+phone 320px has no horizontal overflow; controls are 48px. Web dialog forward
+and reverse focus wrapping and focus restoration pass. A 640px viewport also
+checks the compact layout equivalent to a 1280px window at 200% zoom; browser
+zoom itself and native physical-device accessibility remain unverified.

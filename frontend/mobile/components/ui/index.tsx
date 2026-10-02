@@ -51,7 +51,7 @@ export function Button({
 }: {
   title: string;
   onPress: () => void;
-  variant?: "primary" | "secondary" | "quiet";
+  variant?: "primary" | "secondary" | "quiet" | "destructive";
   disabled?: boolean;
 }) {
   return (
@@ -63,6 +63,7 @@ export function Button({
       style={[
         styles.button,
         variant === "primary" && !disabled && styles.primary,
+        variant === "destructive" && !disabled && {backgroundColor:statusColors.DISPUTED.background,borderColor:statusColors.DISPUTED.border},
         (variant === "quiet" || disabled) && styles.quiet,
       ]}
     >
@@ -70,6 +71,7 @@ export function Button({
         style={[
           styles.buttonText,
           variant === "primary" && !disabled && styles.onPrimary,
+          variant === "destructive" && !disabled && {color:statusColors.DISPUTED.text},
           disabled && styles.body,
         ]}
       >

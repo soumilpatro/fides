@@ -9,17 +9,19 @@ import { commitmentRole, counterparty, currentTerms, proposalActions, proposalCo
 import { otherParticipant } from "@fides/shared/connections/model";
 import { Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Screen, StatusChip, TextField, Title } from "../../components/ui";
 import { useCommitments } from "./useCommitments";
+import { ExtensionsSection, NewExtension } from "../extensions/Extensions";
 import { Summary, History } from "../dashboard/Dashboard";
 import { RepaymentsSection, ReportRepayment, RepaymentDetail } from "../repayments/Repayments";
 import { useAuth } from "../auth/useAuth";
-type Destination = { page: "list" } | { page: "new"; connection?: string } | { page: "detail"; id: string } | {page:"report";id:string} | {page:"repayment";id:string;parent:string};
-export function Commitments({ initialConnection, initialCreate=false, onConnections }: { initialConnection?: string; initialCreate?: boolean; onConnections: () => void }) {
-  const [destination, setDestination] = useState<Destination>(() => initialConnection || initialCreate ? { page: "new", connection: initialConnection } : { page: "list" });
+type Destination = {page:"extension";id:string} | { page: "list" } | { page: "new"; connection?: string } | { page: "detail"; id: string } | {page:"report";id:string} | {page:"repayment";id:string;parent:string};
+export function Commitments({ initialConnection, initialCreate=false, initialDetail, onConnections }: { initialConnection?: string; initialCreate?: boolean; initialDetail?:string; onConnections: () => void }) {
+  const [destination, setDestination] = useState<Destination>(() => initialDetail ? {page:"detail",id:initialDetail} : initialConnection || initialCreate ? { page: "new", connection: initialConnection } : { page: "list" });
   const back = () => setDestination({page:"list"});
+  if(destination.page === "extension")return <NewExtension key={destination.id} id={destination.id} onBack={()=>setDestination({page:"detail",id:destination.id})}/>;
   if(destination.page === "report")return <ReportRepayment key={destination.id} id={destination.id} onBack={()=>setDestination({page:"detail",id:destination.id})} onDetail={id=>setDestination({page:"repayment",id,parent:destination.id})}/>;
   if(destination.page === "repayment")return <RepaymentDetail key={destination.id} id={destination.id} onBack={()=>setDestination({page:"detail",id:destination.parent})}/>;
   return destination.page === "new" ? <NewCommitment selected={destination.connection} onBack={back} onConnections={onConnections} onDetail={id => setDestination({page:"detail",id})} /> :
-    destination.page === "detail" ? <CommitmentDetail key={destination.id} id={destination.id} onBack={back} onReport={()=>setDestination({page:"report",id:destination.id})} onRepayment={id=>setDestination({page:"repayment",id,parent:destination.id})} /> :
+    destination.page === "detail" ? <CommitmentDetail key={destination.id} id={destination.id} onBack={back} onRequest={()=>setDestination({page:"extension",id:destination.id})} onReport={()=>setDestination({page:"report",id:destination.id})} onRepayment={id=>setDestination({page:"repayment",id,parent:destination.id})} /> :
     <CommitmentsList onNew={() => setDestination({page:"new"})} onDetail={id => setDestination({page:"detail",id})} />;
 }
 function Feedback({ error, busy }: { error: string | null; busy: boolean }) {
@@ -96,7 +98,8 @@ function TermsView({ terms }: { terms: Terms }) {
     <Body>Interest: {v.interest_type === "NONE" ? "No interest" : "Simple fixed: " + percentText(v.interest_rate_bps!)}</Body>
     <Body>Grace period: {v.grace_period_days} days</Body><Body>Due timezone: {v.due_timezone ?? "Timezone not recorded for these legacy terms."}</Body><Body supporting>Version: {v.version_no}</Body></Card>;
 }
-function CommitmentDetail({ id, onBack, onReport, onRepayment }: { id: string; onBack: () => void; onReport:()=>void; onRepayment:(id:string)=>void }) {
+function CommitmentDetail({ id, onBack, onReport, onRepayment, onRequest }: { id: string; onBack: () => void; onReport:()=>void; onRepayment:(id:string)=>void; onRequest:()=>void }) {
+  const [revision,setRevision]=useState(0);
   const data = useCommitments(id), [confirmation,setConfirmation] = useState<ProposalAction | null>(null);
   const row = data.data?.detail, other = row && counterparty(row,data.userId);
   const copy = confirmation && other ? proposalConfirmation(confirmation,other.display_name) : null;
@@ -110,7 +113,7 @@ function CommitmentDetail({ id, onBack, onReport, onRepayment }: { id: string; o
         <Body>Installment {item.sequence_no} · {item.due_date}</Body><StatusChip label={item.status.replaceAll("_"," ")} />
         <Body>Principal: {formatMoney(item.principal_amount_minor,item.currency)}</Body><Body>Interest: {formatMoney(item.interest_amount_minor,item.currency)}</Body><Body>Total due: {formatMoney(item.total_due_minor,item.currency)}</Body>
       </View>)}</Card>}
-      <History key={row.id} id={row.id} onRepayment={onRepayment}/><RepaymentsSection id={row.id} onReport={onReport} onDetail={onRepayment}/>
+      <ExtensionsSection id={row.id} onRequest={onRequest} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><History key={row.id+":"+revision} id={row.id} onRepayment={onRepayment}/><RepaymentsSection id={row.id} onReport={onReport} onDetail={onRepayment}/>
       {proposalActions(row,data.userId).map(action => {const pending = data.pending(action); return <Button key={action}
         title={pending ? "Retry same " + action : {confirm:"Confirm commitment",reject:"Reject proposal",cancel:"Cancel proposal"}[action]}
         disabled={data.busy || data.actionBlocked(action) || !data.data?.terms || !!pending?.blocked || !!pending?.needsReconcile} onPress={() => setConfirmation(action)} />;})}

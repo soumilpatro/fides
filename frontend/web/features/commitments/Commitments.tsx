@@ -10,6 +10,7 @@ import { commitmentRole, counterparty, currentTerms, proposalActions, proposalCo
 import { otherParticipant } from "@fides/shared/connections/model";
 import { Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, StatusChip, TextField } from "../../components/ui";
 import { useCommitments } from "./useCommitments";
+import { ExtensionsSection } from "../extensions/Extensions";
 import { History } from "../dashboard/Dashboard";
 import { RepaymentsSection } from "../repayments/Repayments";
 import { useAuth } from "../auth/useAuth";
@@ -98,6 +99,7 @@ function Confirm({ action, name, onCancel, onConfirm }: { action: ProposalAction
     <h2 id="proposal-confirm-title">{copy.title}</h2><p id="proposal-confirm-body">{copy.body}</p><div className="button-row"><Button variant="quiet" autoFocus onClick={onCancel}>Go back</Button><Button onClick={onConfirm}>{copy.button}</Button></div></dialog>;
 }
 export function CommitmentDetail({ id }: { id: string }) {
+  const [revision,setRevision]=useState(0);
   const data = useCommitments(id), [confirmation, setConfirmation] = useState<ProposalAction | null>(null);
   const row = data.data?.detail, other = row && counterparty(row,data.userId);
   return <div className="commitments-feature"><Link className="auth-back" href="/app/overview">← Commitments</Link><h1>Commitment detail</h1>
@@ -111,7 +113,7 @@ export function CommitmentDetail({ id }: { id: string }) {
       {data.data?.installments && <Card title="Installment schedule">{data.data.installments.map(item => <div key={item.id} className="installment-display">
         <h3>Installment {item.sequence_no} · {item.due_date}</h3><StatusChip label={item.status.replaceAll("_"," ")} />
         <dl className="commitment-facts"><dt>Principal</dt><dd>{formatMoney(item.principal_amount_minor,item.currency)}</dd><dt>Interest</dt><dd>{formatMoney(item.interest_amount_minor,item.currency)}</dd><dt>Total due</dt><dd>{formatMoney(item.total_due_minor,item.currency)}</dd></dl></div>)}</Card>}
-      <RepaymentsSection id={row.id}/><History key={row.id} id={row.id}/>
+      <ExtensionsSection id={row.id} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><RepaymentsSection id={row.id}/><History key={row.id+":"+revision} id={row.id}/>
       <div className="button-row">{proposalActions(row,data.userId).map(action => {
         const pending = data.pending(action);
         return <Button key={action} disabled={data.busy || data.actionBlocked(action) || !data.data?.terms || !!pending?.blocked || !!pending?.needsReconcile}
