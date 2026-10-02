@@ -7,6 +7,7 @@ import { Brand } from "../components/Brand";
 import { Body, Button, EmptyState, LoadingState, Screen, Title } from "../components/ui";
 import { AuthFlow } from "../features/auth/AuthFlow";
 import { useAuth } from "../features/auth/useAuth";
+import { Connections } from "../features/connections/Connections";
 import { FoundationScreen } from "../app/FoundationScreen";
 export function RootNavigator() {
   const { state } = useAuth();
@@ -32,10 +33,10 @@ function AuthenticatedShell() {
   if (state.status !== "authenticated") return null;
   return <>
     <View style={styles.header}><Brand /><Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => setDestination("Notifications")} style={styles.entry}><Text style={styles.label}>🔔 Notifications</Text></Pressable></View>
-    <Screen><Title>{destination}</Title><Body>Welcome, {state.user.display_name}.</Body><EmptyState title="Your account is ready." message="This destination is reserved for a future release." />
+    {destination === "Connections" ? <Connections key={state.user.id} /> : <Screen><Title>{destination}</Title><Body>Welcome, {state.user.display_name}.</Body><EmptyState title="Your account is ready." message="This destination is reserved for a future release." />
       {destination === "Home" && <Button title="Create commitment · future release" disabled onPress={() => {}} />}
       {destination === "Profile" && <Button title="Log out" variant="quiet" onPress={() => void session.logout()} />}
-    </Screen>
+    </Screen>}
     <View style={styles.tabs}>{tabs.map(tab => <Pressable key={tab} accessibilityRole="tab" accessibilityState={{ selected: tab === destination }} onPress={() => setDestination(tab)} style={styles.tab}><Text style={[styles.label, destination === tab && styles.selected]}>{tab}</Text></Pressable>)}</View>
   </>;
 }

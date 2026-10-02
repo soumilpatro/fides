@@ -12,7 +12,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   if (state.status !== "authenticated") return <main className="auth-page"><LoadingState message="Resolving your session…" /></main>;
   return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to content</a>
     <aside className="sidebar"><Link href="/app/overview"><Brand /></Link>
-      <nav aria-label="Fides">{destinations.map(([route, label]) => <Link key={route} href={`/app/${route}`} aria-current={path === `/app/${route}` ? "page" : undefined}>{label}</Link>)}</nav>
+      <nav aria-label="Fides">{destinations.map(([route, label]) => <Link key={route} href={`/app/${route}`} aria-current={(path === `/app/${route}` || path.startsWith(`/app/${route}/`)) ? "page" : undefined}>{label}</Link>)}</nav>
       <div className="sidebar-footer"><p>{state.user.display_name}</p><Button variant="quiet" onClick={() => void session.logout()}>Log out</Button></div>
     </aside><Screen>{children}</Screen></div>;
 }

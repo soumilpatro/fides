@@ -16,7 +16,10 @@
     "typecheck": "npm run typecheck --workspaces",
     "build:web": "npm run build --workspace=@fides/web",
     "test:auth": "node --test tests/auth.test.cjs",
-    "preview:auth": "node tests/auth-preview.cjs"
+    "preview:auth": "node tests/auth-preview.cjs",
+    "test:connections": "node --test tests/connections.test.cjs",
+    "test:connections:live": "node tests/connections-live.cjs",
+    "preview:connections": "node tests/connections-preview.cjs"
   },
   "devDependencies": {
     "typescript": "~6.0.3"

@@ -1,10 +1,10 @@
-// Transparent F1 transport relay. No cookie session or credential store.
+// Closed F1/F2 transport relay. No cookie session or credential store.
+import { isAllowedApiRoute } from "@fides/shared/api/relay";
 export const dynamic = "force-dynamic";
 async function relay(request: Request, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
   const endpoint = path.join("/");
-  const allowed = request.method === "GET" ? endpoint === "me" :
-    request.method === "POST" && ["auth/otp/request", "auth/otp/verify", "auth/refresh", "auth/logout"].includes(endpoint);
+  const allowed = isAllowedApiRoute(request.method, path);
   const requestId = crypto.randomUUID();
   const failure = (status: number, code: string, message: string) => Response.json({ error: { code, message } },
     { status, headers: { "Cache-Control": "no-store", "X-Request-ID": requestId } });
@@ -31,3 +31,4 @@ async function relay(request: Request, context: { params: Promise<{ path: string
 }
 export const GET = relay;
 export const POST = relay;
+export const DELETE = relay;
