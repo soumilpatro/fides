@@ -17,6 +17,7 @@ from app.auth.safety import auth_operation, utc_now
 from app.commitments import CommitmentService
 from app.core.errors import AuthError, FinancialError, ResourceUnavailable
 from app.core.logging import sanitize_request_id
+from app.core.reliability import transaction
 from app.core.validation import normalize_timezone
 from app.financial_calculations import accounting
 from app.idempotency import Idempotency
@@ -179,7 +180,7 @@ class RepaymentService:
             return 201, self._response(db, row, parent)
 
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "repayments") as db:
                 result = self.idempotency.execute(
                     db,
                     principal,
@@ -197,7 +198,7 @@ class RepaymentService:
     @auth_operation
     def read(self, principal, identifier, *, detail=False):
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "repayments") as db:
                 if detail:
                     access = self.authorization.repayment(db, principal, identifier, lock=True)
                     parent = db.get(Commitment, access.commitment_id)

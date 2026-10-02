@@ -23,6 +23,7 @@ def _build_engine():
     settings = get_settings()
     return create_engine(
         settings.database_url,
+        isolation_level=settings.database_isolation_level,
         pool_pre_ping=True,  # detect and discard stale/dropped connections
         pool_size=5,
         max_overflow=10,

@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.summary_schemas import SummaryResponse
 from app.auth.safety import auth_operation, utc_now
 from app.core.errors import AuthError
+from app.core.reliability import transaction
 from app.financial_calculations import accounting
 from app.models.commitment import Commitment
 from app.models.commitment_terms_version import CommitmentTermsVersion
@@ -37,7 +38,7 @@ class SummaryService:
     @auth_operation
     def read(self, principal):
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "summary") as db:
                 self.sessions.revalidate_user_locked(db, principal)
                 now = utc_now(self.sessions.clock, db)
                 participation = or_(

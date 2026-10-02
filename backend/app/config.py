@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # .env.example are local-only Docker Compose development values.
     database_url: str = Field(default="", repr=False)
     test_database_url: str = Field(default="", repr=False)
+    database_isolation_level: Literal["READ COMMITTED"] = "READ COMMITTED"
 
     # Disabled is explicit and safe during foundation-only local startup.
     # No provider is constructed here; future orchestration selects an adapter.

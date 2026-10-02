@@ -17,6 +17,7 @@ from app.auth.authorization import AuthorizationService
 from app.auth.safety import auth_operation, utc_now
 from app.core.errors import AuthError, FinancialError, ResourceUnavailable
 from app.core.logging import sanitize_request_id
+from app.core.reliability import transaction
 from app.idempotency import Idempotency
 from app.models.audit_log import AuditLog
 from app.models.commitment import Commitment
@@ -206,7 +207,7 @@ class CommitmentService:
 
     def _execute(self, principal, action, identifier, key, payload, perform):
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "commitments") as db:
 
                 def replay_authorize(db):
                     if identifier is not None:
@@ -222,7 +223,7 @@ class CommitmentService:
     @auth_operation
     def detail(self, principal, identifier):
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "commitments") as db:
                 self.authorization.commitment(db, principal, identifier, lock=True)
                 result = self._response(db, db.get(Commitment, identifier))
             return result
@@ -232,7 +233,7 @@ class CommitmentService:
     @auth_operation
     def list(self, principal):
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "commitments") as db:
                 self.sessions.revalidate_user_locked(db, principal)
                 rows = db.scalars(
                     select(Commitment)

@@ -6291,3 +6291,220 @@ Do NOT include:
 - push
 - frontend DTOs
 - F1 work
+
+## B13-D0 — Reliability, Concurrency & Idempotency Hardening Contract
+
+- Date: 2026-10-01
+- Status: APPROVED founder/technical decision; recorded before B13 implementation.
+- Scope: B13 — reliability hardening for the existing backend through B12.
+- Authority: This decision preserves approved B2–B12 behavior and governs B13 reliability work. It does not authorize product/API behavior changes.
+- Implementation state: This entry records decisions only. B13 implementation, tests, migrations, and dependency changes are not part of B13-D0.
+
+### 1. B13 purpose
+
+B13 is hardening only. It must not change product behavior.
+
+Use a tests-first process to prove existing reliability architecture under failure and race conditions before changing production code. If a focused test demonstrates an in-scope defect, make the smallest safe fix and rerun affected regressions. Do not broadly refactor services for consistency.
+
+### 2. Financial idempotency contract
+
+Exactly the existing ten financial mutation endpoints continue to require `Idempotency-Key`. Their actor + operation/resource + key scope, normalized request hash, endpoint scopes, and historical hashes remain unchanged.
+
+- Same key and same normalized request replays the original logical result.
+- Same key with a changed request returns the existing `IDEMPOTENCY_CONFLICT` error.
+- A concurrent in-flight duplicate returns the existing `CONFLICT` error.
+- Current authorization is rechecked before replay.
+- Successful results are retained for 30 days.
+- A failed financial transaction does not consume a new key.
+- The advisory lock is acquired before User or resource locks.
+- Idempotency completion commits atomically with domain effects.
+
+Do not add idempotency requirements to authentication, account, connection, or notification-read actions.
+
+### 3. Lock ordering
+
+Preserve this canonical financial lock order:
+
+Idempotency advisory lock
+→ affected User rows in deterministic UUID order
+→ Connection where required
+→ Commitment
+→ child resource
+
+Existing patterns remain authoritative:
+
+| Operation | Lock order |
+| --- | --- |
+| Commitment create | I → U* → C → inserts |
+| Commitment confirm | I → U* → C → P |
+| Commitment reject/cancel | I → U* → P |
+| Repayment report | I → U* → P |
+| Verify/dispute | I → U* → P → R |
+| Extension create | I → U* → P |
+| Extension decision | I → U* → P → E |
+| B12 summary | U → financial reads |
+
+Do not introduce child-first locking or lock every Commitment unnecessarily.
+
+### 4. Transaction atomicity
+
+Where applicable, one logical financial operation commits together:
+
+- domain mutation;
+- TermsVersion and installments;
+- LedgerEvent;
+- AuditLog;
+- NotificationEvent; and
+- completed IdempotencyKey result.
+
+Helpers may flush but must not independently commit. OTP/provider operations remain intentional exceptions to single-database-transaction semantics.
+
+### 5. Post-lock revalidation
+
+Re-read and revalidate authoritative state after required locks, including where relevant:
+
+- actor/session and participant association;
+- connection and commitment state;
+- repayment state and current effective TermsVersion;
+- verified outstanding and pending reporting capacity;
+- extension base version and request state; and
+- active participant state.
+
+Pre-lock discovery reads may identify lock targets but are not authoritative financial snapshots.
+
+### 6. Application transaction isolation
+
+Fides application transactions rely on PostgreSQL `READ COMMITTED` unless a later approved decision specifies otherwise for a particular workflow.
+
+B13 must verify or explicitly configure application transaction isolation as `READ COMMITTED`, add automated verification of effective application isolation, and fail safely if application configuration explicitly selects an unsupported isolation level.
+
+Do not globally move to `REPEATABLE READ` or `SERIALIZABLE`. Do not introduce per-operation isolation overrides without demonstrated need.
+
+### 7. Database retry policy
+
+Do not add a generic automatic database retry loop. Do not retry a statement inside an aborted transaction.
+
+Deadlock, serialization, and timeout failures roll back and surface through existing safe behavior. Client recovery for financial operations uses the same `Idempotency-Key` and identical payload.
+
+Do not automatically retry PostgreSQL:
+
+- `40P01` deadlock;
+- `40001` serialization failure;
+- `55P03` lock timeout; or
+- `57014` statement timeout/cancellation.
+
+Whole-transaction automatic retry is deferred pending a separate policy for retry count, timing/backoff, transaction recreation, and observability.
+
+### 8. Lost commit acknowledgement
+
+B13 must test a transaction that commits successfully but whose acknowledgement is lost to the caller/application. Retrying the same request with the same key and payload must return the persisted original logical result and leave exactly one complete effect set.
+
+There must be no duplicate Commitment, TermsVersion, Repayment, RepaymentVerification, ExtensionRequest, LedgerEvent, AuditLog, NotificationEvent, or idempotency result.
+
+### 9. Expired idempotency results
+
+Add tests for expired-result replacement, failure while replacing an expired result, and concurrent reuse at the expiry boundary.
+
+Preserve these rules:
+
+- only an expired result may be replaced;
+- replacement remains serialized under the existing advisory lock;
+- failed replacement rolls back new domain work and replacement;
+- a later valid retry remains possible; and
+- no durable in-progress reservation is added without a new approved decision.
+
+### 10. Commitment race tests
+
+Add targeted tests including reject versus reject and representative cross-route operations with reversed participant roles.
+
+Verify only valid serialized outcomes, no duplicate terminal effects or ledger/audit/notification effects, and no invalid lifecycle state.
+
+### 11. Extension race tests
+
+Add tests for accept versus a new extension request and accept versus repayment report.
+
+Preserve at most one `REQUESTED` extension per Commitment, B10 stale-base handling, unique TermsVersion version allocation, and correct reporting capacity. Do not add a database uniqueness constraint solely for this purpose.
+
+### 12. Summary race tests
+
+Add tests for summary versus repayment report and summary versus actual account deactivation.
+
+Preserve the actor User lock and fixed evaluation time. The result must be internally coherent or return the existing authorization/account-state denial; it must never contain mixed-state totals.
+
+### 13. Credential race tests
+
+Add financial-request race tests against logout and refresh/session rotation.
+
+The operation winning the existing coordination determines the valid outcome:
+
+- revocation or rotation first means the subsequent protected financial action is denied under existing authentication rules;
+- financial mutation first may complete atomically; and
+- an already valid committed transaction is not retroactively rolled back.
+
+### 14. Connection race tests
+
+Add representative tests for connection block/remove versus commitment confirmation.
+
+Preserve current connection eligibility rules. Blocked/removed relationships do not erase historical financial participation, and participant-based financial authorization remains unchanged.
+
+### 15. PostgreSQL failure-class tests
+
+Add targeted tests for `40P01`, `40001`, `55P03`, `57014`, connection loss before commit, and connection loss during/after commit where the outcome is uncertain.
+
+Verify rollback when commit did not occur, safe public errors, retained request correlation, no partial financial effects, and same-key recovery where appropriate.
+
+### 16. Structured reliability diagnostics
+
+Add sanitized structured internal reliability logging. Allowed fields are:
+
+- event/category;
+- operation category;
+- failure phase;
+- safe database category;
+- allowlisted SQLSTATE;
+- request ID; and
+- commit outcome when knowable: `committed`, `rolled_back`, `uncertain`, or `unknown`.
+
+Example categories include deadlock, serialization failure, lock timeout, statement timeout, integrity error, connection failure, commit uncertain, idempotency conflict, and state conflict.
+
+Never log SQL text, bind values, raw exception text that may expose data, Idempotency-Key values, request bodies, phone numbers, auth tokens, OTPs, notes/reasons, financial descriptions, or other prohibited sensitive fields. If commit outcome is uncertain, log `uncertain`; never report it as rolled back.
+
+### 17. Public errors
+
+Do not add B13 public reliability error codes. Preserve existing `CONFLICT`, `IDEMPOTENCY_CONFLICT`, `SERVICE_UNAVAILABLE`, and safe generic internal-error behavior. PostgreSQL-specific details remain internal.
+
+### 18. Failure injection and rollback
+
+Add or strengthen failure-injection tests for failure after successful flushes but before commit, idempotency-result persistence, expired-result update, ledger insertion, audit insertion, notification insertion, TermsVersion creation, verification-history creation, financial state update, and commit stage.
+
+Assert complete logical rollback whenever commit did not occur.
+
+### 19. Complete side-effect assertions
+
+Where practical, new race and failure tests must verify the complete effect set: primary domain state, terms/history, repayment/verification rows, LedgerEvent, AuditLog, NotificationEvent, and IdempotencyKey result.
+
+### 20. Schema and infrastructure
+
+B13 requires no migration, new index, model/table, uniqueness constraint, or dependency by default.
+
+If a new B13 test demonstrates a defect that genuinely requires a schema change, stop and report the exact issue before creating any migration.
+
+### 21. Bounded fix policy
+
+Use this sequence:
+
+1. Add a focused test.
+2. Demonstrate the current result.
+3. If behavior is already correct, keep production code unchanged.
+4. If a defect exists, make the smallest in-scope fix.
+5. Rerun affected regressions.
+
+Do not broadly refactor services for consistency.
+
+### 22. Explicit exclusions
+
+Do not include new endpoints, F1/frontend work, settlement/waiver, overdue/default product behavior, reminders, notification preferences, push delivery, installment allocation, closure redesign, contact discovery, authentication redesign, retention redesign, generic automatic retries, new timeout values, speculative indexes, dependency upgrades, broad logging redesign, or B14 security-hardening work.
+
+### 23. Validation expectation
+
+B13 implementation must eventually run focused B13 reliability tests, affected B2–B12 regressions, the full backend suite, Ruff, formatter check, `pip check`, and `git diff --check`. No wholesale skips.
