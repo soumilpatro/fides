@@ -6550,3 +6550,107 @@ Only demonstrated defects may be fixed. Every fix requires a focused test, demon
 8. Perform the final security gate.
 
 No implementation occurs before step 4.
+
+## B14-D1 — APPROVED — Security implementation scope
+
+### A. Request body size limit
+
+Maximum HTTP request body:
+
+1 MiB = 1,048,576 bytes
+
+Rules:
+
+- exactly 1,048,576 bytes is allowed;
+- any body larger than 1,048,576 bytes is rejected;
+- rejection status: HTTP 413 Payload Too Large;
+- public error code: `REQUEST_TOO_LARGE`;
+- use the existing standard public error envelope;
+- do not expose parser, framework, or body-size internals;
+- preserve correlation/request ID behavior;
+- preserve safe cache/security headers;
+- reject clearly oversized declared `Content-Length` before service/provider execution;
+- `Content-Length` is not trusted as the only enforcement mechanism;
+- missing, misleading, or streamed/chunked bodies must be counted by actual bytes;
+- stop reading once the ceiling is exceeded;
+- valid requests must remain readable downstream;
+- no dependency is added;
+- no OTP/rate-limit semantics are changed.
+
+### B. Malformed Host / raw path correction
+
+Security-sensitive path classification must use the authoritative ASGI request path rather than reconstructed `request.url.path` where malformed Host could influence URL reconstruction.
+
+Requirements:
+
+- use `request.scope["path"]` or an equivalent authoritative raw request path;
+- preserve routing behavior;
+- preserve authorization;
+- preserve public error taxonomy;
+- preserve cache policy;
+- no FastAPI/Starlette upgrade in B14;
+- no proxy redesign;
+- no dependency change.
+
+### C. API security headers
+
+Add bounded API response headers:
+
+- `X-Content-Type-Options: nosniff`;
+- `Referrer-Policy: no-referrer`.
+
+Requirements:
+
+- apply to normal API success responses;
+- apply to handled API error responses;
+- apply to 413 responses;
+- preserve existing `Cache-Control`;
+- preserve `WWW-Authenticate`;
+- preserve request/correlation IDs;
+- preserve `Retry-After` where already present.
+
+Do not add in this backend task:
+
+- frontend CSP;
+- frontend frame policy;
+- local/dev HSTS;
+- CSRF infrastructure;
+- unrelated security headers.
+
+HSTS/CSP/frame policy remain deployment/web-host concerns.
+
+### D. Implementation limits
+
+B14-D1 does not approve:
+
+- migrations;
+- dependency upgrades;
+- auth redesign;
+- API redesign beyond the approved 413 / `REQUEST_TOO_LARGE` contract;
+- financial behavior changes;
+- B13 transaction/lock/idempotency changes;
+- frontend changes;
+- new product features;
+- Mutual Closure;
+- reminders;
+- Notification Preferences;
+- Upcoming/Overdue endpoints.
+
+If implementation later requires any of those, stop and request approval.
+
+### E. Required validation
+
+Implementation must include focused regression coverage for:
+
+- body-size boundary;
+- streamed/misleading `Content-Length` bypass attempts;
+- provider/service not invoked for oversized bodies;
+- 413 error envelope;
+- malformed Host path invariance;
+- no-store preservation;
+- security headers on success/error paths;
+- authz unchanged;
+- B13 behavior unchanged;
+- financial invariants unchanged.
+
+Then run the appropriate full backend regression before B14 completion.
