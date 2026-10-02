@@ -3,8 +3,9 @@ import { createContext, useEffect, useState, useSyncExternalStore, type ReactNod
 
 import { createAuthApi, type AuthApi } from "@fides/shared/api/auth";
 import { AuthSession, type AuthState } from "@fides/shared/auth/session";
+import { createConnectionsApi, type ConnectionsApi } from "@fides/shared/api/connections";
 import { memorySessionStore } from "./session/session-store";
-export interface AuthContextValue { state: AuthState; session: AuthSession; api: AuthApi }
+export interface AuthContextValue { state: AuthState; session: AuthSession; api: AuthApi; connections: ConnectionsApi }
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [services] = useState(() => {
@@ -12,7 +13,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const baseUrl = new URL(process.env.NEXT_PUBLIC_API_BASE_URL || "/api/v1", origin).href;
     const api = createAuthApi({ baseUrl, accessToken: () => session.accessToken() });
     const session = new AuthSession(memorySessionStore(), api);
-    return { session, api };
+    const connections = createConnectionsApi({ baseUrl, accessToken: session.accessToken });
+    return { session, api, connections };
   });
   const state = useSyncExternalStore(services.session.subscribe, services.session.snapshot, services.session.snapshot);
   useEffect(() => { void services.session.bootstrap(); }, [services]);

@@ -422,3 +422,14 @@ main {
     white-space: nowrap;
   }
 }
+.connections-feature { display: grid; gap: var(--space-lg); max-width: 60rem; }
+.connections-feature .card { height: auto; }
+.connection-list { list-style: none; padding: 0; margin: 0; }
+.connection-list li + li { border-top: 1px solid var(--border); }
+.connection-row { display: flex; align-items: center; gap: var(--space-md); flex-wrap: wrap; padding-block: var(--space-md); }
+.connection-row .person { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.connection-dates { display: grid; gap: var(--space-md); margin-block: var(--space-lg); }
+.connection-dates dt { font-weight: 600; }
+.connection-dates dd { margin: 0; font-size: var(--type-supporting); }
+.connection-confirm { max-width: 40rem; width: calc(100% - var(--space-section)); padding: var(--space-xl); border: 1px solid var(--border); border-radius: var(--radius-card); color: var(--ink); background: var(--surface); }
+.connection-confirm::backdrop { background: var(--canvas); opacity: .85; }

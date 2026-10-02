@@ -1,19 +1,19 @@
-# Fides frontend — F1
+# Fides frontend — F2
 
 Separate Next.js and Expo clients implement phone OTP authentication against the
-existing B2 contract. No product/financial screens are implemented. Backend B12
-remains server-only; B13 is a separate branch and is not used here.
+existing B2 contract and the merged Connections API. F2 starts from merged F1 and
+B13 on main at 8a2987b. Backend B12 remains server-only.
 
 ## Structure
 
 ```text
 shared/
-  api/             typed auth DTOs, errors, request client
+  api/             typed auth/connection DTOs, errors, request client
   auth/            pure serialized session coordinator and flow helpers
   tokens/          approved brand/layout/type and semantic status tokens
 web/
   app/             welcome, signup, login, guarded app destinations
-  app/api/v1/      allowlisted transparent auth transport relay
+  app/api/v1/      allowlisted transparent auth/Connections relay
   app/dev/         development-only F0 foundation preview
   features/auth/   DOM auth flow, context, guard, memory SessionStore
 mobile/
@@ -54,7 +54,7 @@ Web configuration (`web/.env.local`, based on `web/.env.example`):
 - `NEXT_PUBLIC_API_BASE_URL=/api/v1`
 - `FIDES_BACKEND_API_URL=http://localhost:8000/api/v1`
 
-Next's relay forwards only GET `/me` and POST `auth/otp/request`, `auth/otp/verify`,
+Next's allowlisted relay forwards Connections routes as well as GET `/me` and POST `auth/otp/request`, `auth/otp/verify`,
 `auth/refresh`, `auth/logout`. It forwards bearer/JSON and safe response headers,
 uses no cookies or server credential storage, disables caching, refuses redirects,
 and never logs bodies. This avoids requiring backend CORS changes. It does not
@@ -126,14 +126,14 @@ palette or additional missing semantic tokens are invented.
 Web shell: Overview, Connections, Activity, Notifications, Profile / Settings.
 Mobile: permanent Home, Connections, Activity, Profile tabs, global bell entry for
 Notifications. Create commitment is a contextual disabled future-release action,
-not a fifth tab. Destinations contain placeholders only, without financial data.
+not a fifth tab. Connections contains real F2 content. Other destinations remain placeholders, without financial data.
 
 **Final Record Loop production asset missing.** Shared concept is approved, but
 independent Brand components use a text-only FIDES wordmark as the asset insertion
 point. No logo is redrawn. The F0 preview remains `/dev/foundation` on web (404 in
 production) and a development-only entry on mobile.
 
-F2+, dashboard/B12 UI, upcoming/overdue/activity calculations, settlement, financial
+F3+, dashboard/B12 UI, upcoming/overdue/activity calculations, settlement, financial
 workflows, profile editing/deactivation, push, dark mode and frontend analytics are
 excluded.
 
@@ -178,3 +178,40 @@ signup/login cooldowns remain enforced. The fake provider keeps challenge state 
 memory and resets its reference sequence on restart; against retained database
 history, a reused reference can safely fail with 503. Keep a single backend process
 for a live validation sequence. No backend suite is rerun for this frontend-only batch.
+
+## F2 Connections
+
+The existing API client provides create/list/detail/accept/reject/block/remove operations.
+The relay allows only the seven approved Connections routes plus F1 authentication.
+Create sends only `{ phone }`; server responses retain only connection ID/status,
+participant IDs/display names and timestamps. Phone numbers are entered only in the
+new-request form and never displayed in connection lists/details.
+
+Web routes are `/app/connections`, `/app/connections/new`, and
+`/app/connections/[id]`. Mobile uses local list/new/detail navigation inside the
+Connections tab. Other shell tabs remain placeholders. Roles come from authoritative
+GET /me participant IDs. Incoming pending requests allow accept/decline/block;
+outgoing pending requests allow cancel/block; accepted connections allow remove/block.
+Blocked is terminal. Removed is neutral and reconnect opens an empty phone form.
+Accept, decline, cancel, remove and block require confirmation; no action deletes financial history.
+
+There are no optimistic status changes or automatic mutation retries. In-flight guards
+prevent duplicate submissions. Mutation failures reconcile with safe reads; if those
+reads fail, actions remain disabled until refresh. Transient refresh errors preserve
+previous server data. The existing AuthSession owns refresh rotation and invalid-session
+handling. Connection requests have a 15-second transport deadline and no idempotency keys.
+
+Run `npm run test:connections` alongside the F1 checks above. For localhost-only
+visual review, `npm run preview:connections` serves ephemeral auth/connection fixture
+data on port 8766; it is not imported by the apps. Fixture login is +12025550101 with
+code 654321. Point the existing relay/Expo API base to that fixture only for review.
+`npm run test:connections:live` validates the existing local fake-provider backend,
+creates three disposable development accounts, and logs out their sessions. All 14
+live lifecycle/privacy/IDOR checks passed; no backend test suite or backend source
+changes are needed for F2.
+
+No dependencies were added. Expo's compatibility check requests expo ~57.0.26,
+while the unchanged repository pins 57.0.25. This existing recommendation is an approved non-blocking follow-up; no dependency versions changed.
+The authoritative Record Loop asset and physical-device secure-storage validation
+remain known separate items. F3+, financial workflows, contact discovery, unblock,
+notifications, trust scores, dashboard/summary UI and B14 are excluded.
