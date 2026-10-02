@@ -1,16 +1,28 @@
 "use client";
-import { createContext, type ReactNode } from "react";
-import type { AuthState } from "./auth.types";
+import { createContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
-export const AuthContext = createContext<AuthState | undefined>(undefined);
-const anonymous: AuthState = { status: "anonymous" };
-/** Controlled seam only. F1 will connect a reviewed session implementation. */
-export function AuthProvider({
-  children,
-  state = anonymous,
-}: {
-  children: ReactNode;
-  state?: AuthState;
-}) {
-  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
+import { createAuthApi, type AuthApi } from "@fides/shared/api/auth";
+import { AuthSession, type AuthState } from "@fides/shared/auth/session";
+import { memorySessionStore } from "./session/session-store";
+export interface AuthContextValue { state: AuthState; session: AuthSession; api: AuthApi }
+export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [services] = useState(() => {
+    const origin = typeof window === "undefined" ? "http://localhost" : window.location.origin;
+    const baseUrl = new URL(process.env.NEXT_PUBLIC_API_BASE_URL || "/api/v1", origin).href;
+    const api = createAuthApi({ baseUrl, accessToken: () => session.accessToken() });
+    const session = new AuthSession(memorySessionStore(), api);
+    return { session, api };
+  });
+  const state = useSyncExternalStore(services.session.subscribe, services.session.snapshot, services.session.snapshot);
+  useEffect(() => { void services.session.bootstrap(); }, [services]);
+
+  useEffect(() => {
+    if (state.status !== "authenticated") return;
+    const expires = services.session.expiresAt();
+    if (!expires) return;
+    const timer = setTimeout(() => { void services.session.refresh(); }, Math.max(0, Date.parse(expires) - Date.now()));
+    return () => clearTimeout(timer);
+  }, [services, state]);
+  return <AuthContext.Provider value={{ ...services, state }}>{children}</AuthContext.Provider>;
 }

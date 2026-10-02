@@ -7,8 +7,8 @@ import {
   radii,
   typography,
   controls,
+  statusColors,
 } from "@fides/shared/tokens/index";
-import { AppShell } from "../components/shell/AppShell";
 import { AuthProvider } from "../features/auth/AuthProvider";
 import "./globals.css";
 const manrope = localFont({
@@ -35,8 +35,8 @@ const inter = localFont({
   display: "swap",
 });
 export const metadata: Metadata = {
-  title: "Fides — Foundation",
-  description: "Fides app shell and component preview. No product workflows.",
+  title: "Fides",
+  description: "One shared record. A little more certainty.",
 };
 const variables = {
   "--canvas": colors.canvas,
@@ -45,6 +45,7 @@ const variables = {
   "--signal": colors.brand.signal,
   "--human": colors.brand.human,
   "--border": colors.border,
+  ...Object.fromEntries(Object.entries(statusColors).flatMap(([status, values]) => Object.entries(values).map(([key, value]) => [`--status-${status.toLowerCase()}-${key}`, value]))),
   ...Object.fromEntries(
     Object.entries(spacing).map(([key, value]) => [
       `--space-${key}`,
@@ -74,7 +75,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <body>
         <AuthProvider>
-          <AppShell>{children}</AppShell>
+          {children}
         </AuthProvider>
       </body>
     </html>

@@ -1,4 +1,4 @@
-/** Only the five explicitly approved F0 colors. No semantic status palette yet. */
+/** Approved brand colors; semantic status tokens are defined separately. */
 export const colors = {
   canvas: "#F7F6F3",
   surface: "#F7F6F3",

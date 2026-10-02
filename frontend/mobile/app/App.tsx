@@ -32,8 +32,8 @@ export default function App() {
             style={{ color: colors.text.primary }}
           >
             {error
-              ? "Unable to load the foundation fonts. Restart the preview."
-              : "Loading Fides foundation…"}
+              ? "Unable to load Fides fonts. Please restart the app."
+              : "Loading Fides…"}
           </Text>
         </View>
       ) : (

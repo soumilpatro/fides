@@ -12,9 +12,11 @@
   "scripts": {
     "web": "npm run dev --workspace=@fides/web",
     "mobile": "npm run start --workspace=@fides/mobile",
-    "lint": "eslint web shared",
+    "lint": "eslint web mobile shared",
     "typecheck": "npm run typecheck --workspaces",
-    "build:web": "npm run build --workspace=@fides/web"
+    "build:web": "npm run build --workspace=@fides/web",
+    "test:auth": "node --test tests/auth.test.cjs",
+    "preview:auth": "node tests/auth-preview.cjs"
   },
   "devDependencies": {
     "typescript": "~6.0.3"

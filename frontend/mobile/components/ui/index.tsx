@@ -15,6 +15,8 @@ import {
   radii,
   spacing,
   typography,
+  statusColors,
+  type SemanticStatus,
 } from "@fides/shared/tokens/index";
 import { formatMoney } from "@fides/shared/domain/money";
 
@@ -117,11 +119,12 @@ export function Card({
     </View>
   );
 }
-/** Neutral only. Approved semantic color mappings remain unresolved. */
-export function StatusChip({ label }: { label: string }) {
+/** Presentation only; text carries the authoritative status meaning. */
+export function StatusChip({ label, status }: { label: string; status?: SemanticStatus }) {
+  const color = status ? statusColors[status] : null;
   return (
-    <View style={styles.chip}>
-      <Text style={styles.supporting}>{label}</Text>
+    <View style={[styles.chip, color && { backgroundColor: color.background, borderColor: color.border }]}>
+      <Text style={[styles.supporting, color && { color: color.text }]}>{label}</Text>
     </View>
   );
 }

@@ -62,6 +62,8 @@ export function createApiClient(config: {
       throw new ApiError("NETWORK_ERROR", "Unable to reach Fides.", null);
     }
     const requestId = response.headers.get("X-Request-ID");
+    const retry = response.headers.get("Retry-After");
+    const retryAfter = retry && /^\d+$/.test(retry) ? Number(retry) : null;
     if (response.status === 204 && response.ok) return undefined as TResponse;
     let data: unknown;
     try {
@@ -81,6 +83,7 @@ export function createApiClient(config: {
           data.error.message,
           response.status,
           requestId,
+          retryAfter,
         );
       throw new ApiError(
         "HTTP_ERROR",
