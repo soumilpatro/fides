@@ -1,19 +1,20 @@
-# Fides frontend — F2
+# Fides frontend — F3
 
 Separate Next.js and Expo clients implement phone OTP authentication against the
-existing B2 contract and the merged Connections API. F2 starts from merged F1 and
-B13 on main at 8a2987b. Backend B12 remains server-only.
+existing B2 contract and the merged Connections and Commitments APIs. F3 starts
+from current main at 29326f9, including merged B13 and F2. Backend B12 remains server-only.
 
 ## Structure
 
 ```text
 shared/
-  api/             typed auth/connection DTOs, errors, request client
+  api/             typed auth/connection/commitment DTOs, errors, request client
   auth/            pure serialized session coordinator and flow helpers
+  commitments/     pure money/date/form/role and mutation-intent helpers
   tokens/          approved brand/layout/type and semantic status tokens
 web/
   app/             welcome, signup, login, guarded app destinations
-  app/api/v1/      allowlisted transparent auth/Connections relay
+  app/api/v1/      allowlisted transparent auth/Connections/Commitments relay
   app/dev/         development-only F0 foundation preview
   features/auth/   DOM auth flow, context, guard, memory SessionStore
 mobile/
@@ -125,15 +126,16 @@ palette or additional missing semantic tokens are invented.
 
 Web shell: Overview, Connections, Activity, Notifications, Profile / Settings.
 Mobile: permanent Home, Connections, Activity, Profile tabs, global bell entry for
-Notifications. Create commitment is a contextual disabled future-release action,
-not a fifth tab. Connections contains real F2 content. Other destinations remain placeholders, without financial data.
+Notifications. Home/Overview contains independent commitment records, with contextual creation
+there and on accepted Connections. It is not a fifth tab/sidebar destination.
+Activity, Notifications and Profile remain placeholders.
 
 **Final Record Loop production asset missing.** Shared concept is approved, but
 independent Brand components use a text-only FIDES wordmark as the asset insertion
 point. No logo is redrawn. The F0 preview remains `/dev/foundation` on web (404 in
 production) and a development-only entry on mobile.
 
-F3+, dashboard/B12 UI, upcoming/overdue/activity calculations, settlement, financial
+F4+, dashboard/B12 UI, upcoming/overdue/activity calculations, settlement, financial
 workflows, profile editing/deactivation, push, dark mode and frontend analytics are
 excluded.
 
@@ -182,7 +184,8 @@ for a live validation sequence. No backend suite is rerun for this frontend-only
 ## F2 Connections
 
 The existing API client provides create/list/detail/accept/reject/block/remove operations.
-The relay allows only the seven approved Connections routes plus F1 authentication.
+The relay retains the seven approved Connections routes and F1 authentication;
+F3 adds only its eight approved commitment lifecycle/read-only terms routes.
 Create sends only `{ phone }`; server responses retain only connection ID/status,
 participant IDs/display names and timestamps. Phone numbers are entered only in the
 new-request form and never displayed in connection lists/details.
@@ -213,5 +216,87 @@ changes are needed for F2.
 No dependencies were added. Expo's compatibility check requests expo ~57.0.26,
 while the unchanged repository pins 57.0.25. This existing recommendation is an approved non-blocking follow-up; no dependency versions changed.
 The authoritative Record Loop asset and physical-device secure-storage validation
-remain known separate items. F3+, financial workflows, contact discovery, unblock,
+remain known separate items. The F2 milestone excluded F3; the completed F3 scope is documented below.
+Repayment workflows, contact discovery, unblock,
 notifications, trust scores, dashboard/summary UI and B14 are excluded.
+
+## F3 Commitments
+
+Web routes: /app/overview (list), /app/commitments (list alias),
+/app/commitments/new and /app/commitments/[id]. Accepted Connection detail links
+preselect the connection; Home/Overview starts with an accepted-person picker.
+Mobile implements separate React Native list/new/detail screens inside Home and
+uses the same contextual Connection entry. The five web destinations and four
+mobile tabs remain unchanged. Only DTOs, API/errors, parsers, role helpers and
+synchronous mutation-intent state are shared; no shared cross-platform UI.
+
+F3 uses POST/GET /commitments, GET /commitments/{id}, POST /commitments/{id}/confirm,
+/reject, /cancel, GET /commitments/{id}/terms and /installments. The existing relay
+forwards one validated Idempotency-Key only on those commitment POSTs. No generic
+financial proxy or repayment/ledger/extension/notification/summary calls are added.
+API responses are projected to their approved fields; participant phones are absent.
+
+Creation sends connection_id, the current actor's BORROWER/LENDER role, IOU/PEER_LOAN,
+integer principal_amount_minor, explicit INR/USD/GBP, trimmed description or null,
+and explicit initial terms. Decimal amount/percent inputs use string/BigInt parsing;
+no floating-point conversion, currency aggregation or FX. Date-only inputs are
+calendar-validated without timezone arithmetic. Terms always include mutually
+exclusive due_date/installment_dates, NONE/null or SIMPLE_FIXED/1–10000 bps,
+and integer grace 0–365. Schedules support none, single, or 2–60 increasing dates.
+The review identifies both roles, amount/currency and terms before submission.
+Money moves outside Fides. The backend owns eligibility, timezone, versions,
+interest rounding and installment allocation. Detail displays current server terms,
+legacy null timezone copy and server installment amounts/status; no client totals,
+balances or overdue calculations. Responses with inconsistent terms/schedule
+references are withheld for refresh.
+
+Pending creators may cancel; the non-creator may confirm/reject, independently of
+borrower/lender role. Each requires confirmation. Other statuses are read-only.
+Existing commitment reads never depend on current Connection visibility/status;
+confirm failures from a changed connection remain server-authoritative. No optimistic
+status updates or automatic mutation retries. Ambiguous responses retain exact key
+and payload, reconcile by GET, then permit explicit same-operation retry only.
+Opposite lifecycle actions remain disabled while an ambiguous action is unresolved.
+IDEMPOTENCY_CONFLICT freezes that intent rather than silently changing its key.
+Definite failures permit a fresh attempt; success clears the intent. In-memory
+intents survive feature remounts inside AuthProvider, are actor/resource/action
+scoped, and disappear when the application process/provider restarts. Web sessions
+remain memory-only; mobile credentials remain in the existing SecureStore abstraction.
+No tokens, OTPs, phone values or idempotency payloads are logged.
+
+Validation commands from frontend/: npm run test:auth, npm run test:connections,
+npm run test:commitments, npm run test:commitments:live, npm run lint,
+npm run typecheck, npm run build:web, npm run config --workspace=@fides/mobile.
+From frontend/mobile/: npx expo install --check and
+npx expo export --platform ios --output-dir dist/ios.
+The live runner targets localhost's existing fake-provider backend only, provisions
+three disposable development accounts and logs out all sessions. It verifies
+creation, roles, lifecycle, explicit terms, server schedules, independent currencies,
+IDOR/privacy, replay/conflict, lost-response recovery and reads after blocking.
+It does not run the backend suite or alter backend code/configuration/migrations.
+
+For UI review only, npm run preview:commitments starts ephemeral localhost fixtures
+at 127.0.0.1:8767. Point the relay/Expo API base to that URL's /api/v1 temporarily
+using process environment variables. Login +12025550101 (Riya) or +12025550104 (Sam),
+code 654321. Local fixture controls /__fixture/reset and /__fixture/mode allow
+empty/mixed, slow, error, network, ambiguous, invalid and conflict scenarios.
+This clearly isolated test data is never imported by application code and refuses
+production mode; it supplements separate live-backend validation.
+
+No dependencies/versions changed. The existing Expo 57.0.25 vs ~57.0.26
+recommendation remains an approved non-blocking follow-up. The authoritative
+Record Loop asset is still absent (text FIDES fallback); physical-device secure
+storage validation remains separate from the phone-size Expo browser review.
+F4+, B14, repayments, verification, disputes, extensions, ledger, notifications,
+summary/dashboard/balances, settlement, financial aggregation and profile work
+remain excluded.
+
+F3 completion validation: 135 commitment tests, 25 auth regressions and 68
+Connections regressions passed, with 33 live local-backend checks. Lint, all
+workspace typechecks, production web build, Expo config and iOS export passed.
+Web (desktop and narrow) and phone-size Expo browser reviews covered lists,
+creation/context/pickers, all schedule controls, review/roles, pending actions,
+read-only terminal records, terms/schedules, loading and safe recovery errors.
+One focused review fixed opposite-action availability during an unresolved write,
+inconsistent installment snapshots and navigation after feature unmount. The
+visual fixture was also corrected to canonicalize nested JSON property order.

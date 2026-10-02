@@ -14,7 +14,7 @@ export function ConnectionsList() {
   const data = useConnections();
   return <div className="connections-feature">
     <header className="section-heading"><div><p className="eyebrow">People you know</p><h1>Connections</h1>
-      <p>Connections let you create shared commitments later.</p></div>
+      <p>Accepted connections let you create shared commitments.</p></div>
       <Link className="button button--primary" href="/app/connections/new">Add connection</Link></header>
     <Button variant="quiet" disabled={data.busy} onClick={() => void data.refresh()}>Refresh connections</Button>
     <Feedback error={data.error} busy={data.busy} />
@@ -75,6 +75,7 @@ export function ConnectionDetail({ id }: { id: string }) {
       {row.status === "BLOCKED" && <p>This connection is blocked. Fides does not currently provide an unblock action.</p>}
       {row.status === "REMOVED" && <><p>This connection is removed. To send a new request, enter the phone number again.</p>
         <Link className="button button--secondary" href="/app/connections/new">Send new request</Link></>}
+      {row.status === "ACCEPTED" && <Link className="button button--primary" href={"/app/commitments/new?connection=" + row.id}>Create commitment</Link>}
       <div className="button-row">{availableConnectionActions(row, data.userId).map(action =>
         <Button key={action} variant={action === "accept" ? "primary" : "secondary"} disabled={data.busy || data.uncertain}
           onClick={() => setPending(action)}>{actionLabel(action, row)}</Button>)}</div>

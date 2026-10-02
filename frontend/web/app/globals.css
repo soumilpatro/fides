@@ -433,3 +433,16 @@ main {
 .connection-dates dd { margin: 0; font-size: var(--type-supporting); }
 .connection-confirm { max-width: 40rem; width: calc(100% - var(--space-section)); padding: var(--space-xl); border: 1px solid var(--border); border-radius: var(--radius-card); color: var(--ink); background: var(--surface); }
 .connection-confirm::backdrop { background: var(--canvas); opacity: .85; }
+
+.commitments-feature, .commitment-form, .installment-entry { display: grid; gap: var(--space-lg); }
+.commitment-form fieldset { border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--space-lg); display: grid; gap: var(--space-md); min-width: 0; }
+.commitment-form legend { font-weight: 600; padding: 0 var(--space-sm); }
+.choice { display: flex; align-items: center; gap: var(--space-sm); min-height: 48px; }
+.choice input { width: 24px; height: 24px; }
+.field select, .field textarea { width: 100%; min-height: 48px; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--ink); font: inherit; }
+.field textarea { min-height: 96px; }
+.commitment-row { display: flex; align-items: center; gap: var(--space-md); flex-wrap: wrap; }
+.commitment-facts { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr); gap: var(--space-sm) var(--space-md); }
+.commitment-facts dd { margin: 0; overflow-wrap: anywhere; }
+.installment-display { border-top: 1px solid var(--border); padding-top: var(--space-md); }
+.installment-date-row { display: grid; gap: var(--space-sm); }

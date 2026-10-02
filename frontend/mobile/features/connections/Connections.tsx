@@ -7,11 +7,11 @@ import { actionLabel, availableConnectionActions, confirmation, connectionSectio
 import { Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Screen, StatusChip, TextField, Title } from "../../components/ui";
 import { useConnections } from "./useConnections";
 type Destination = { page: "list" } | { page: "new" } | { page: "detail"; id: string };
-export function Connections() {
+export function Connections({ onCreate }: { onCreate: (id: string) => void }) {
   const [destination, setDestination] = useState<Destination>({ page: "list" });
   const back = () => setDestination({ page: "list" });
   return destination.page === "new" ? <NewConnection onBack={back} onDetail={id => setDestination({ page: "detail", id })} /> :
-    destination.page === "detail" ? <ConnectionDetail key={destination.id} id={destination.id} onBack={back} onNew={() => setDestination({ page: "new" })} /> :
+    destination.page === "detail" ? <ConnectionDetail key={destination.id} id={destination.id} onBack={back} onNew={() => setDestination({ page: "new" })} onCreate={onCreate} /> :
     <ConnectionsList onNew={() => setDestination({ page: "new" })} onDetail={id => setDestination({ page: "detail", id })} />;
 }
 function Feedback({ error, busy }: { error: string | null; busy: boolean }) {
@@ -19,7 +19,7 @@ function Feedback({ error, busy }: { error: string | null; busy: boolean }) {
 }
 function ConnectionsList({ onNew, onDetail }: { onNew: () => void; onDetail: (id: string) => void }) {
   const data = useConnections();
-  return <Screen><Title>Connections</Title><Body>Connections let you create shared commitments later.</Body>
+  return <Screen><Title>Connections</Title><Body>Accepted connections let you create shared commitments.</Body>
     <Button title="Add connection" onPress={onNew} /><Button title="Refresh connections" variant="quiet" disabled={data.busy} onPress={() => void data.refresh()} />
     <Feedback error={data.error} busy={data.busy} />
     {data.rows?.length === 0 && <EmptyState title="No connections yet" message="Connect with someone you know to start keeping shared commitments organized." />}
@@ -45,7 +45,7 @@ function NewConnection({ onBack, onDetail }: { onBack: () => void; onDetail: (id
     {data.uncertain && <Button title="Refresh before retrying" variant="quiet" onPress={() => void data.refresh()} />}
   </Screen>;
 }
-function ConnectionDetail({ id, onBack, onNew }: { id: string; onBack: () => void; onNew: () => void }) {
+function ConnectionDetail({ id, onBack, onNew, onCreate }: { id: string; onBack: () => void; onNew: () => void; onCreate: (id: string) => void }) {
   const data = useConnections(id); const [pending, setPending] = useState<ConnectionAction | null>(null);
   const row = data.detail; const other = row && otherParticipant(row, data.userId);
   return <Screen><Button title="Back to Connections" variant="quiet" onPress={onBack} /><Title>Connection detail</Title>
@@ -58,6 +58,7 @@ function ConnectionDetail({ id, onBack, onNew }: { id: string; onBack: () => voi
       {row.status === "BLOCKED" && <Body>This connection is blocked. Fides does not currently provide an unblock action.</Body>}
       {row.status === "REMOVED" && <><Body>This connection is removed. To send a new request, enter the phone number again.</Body>
         <Button title="Send new request" variant="secondary" onPress={onNew} /></>}
+      {row.status === "ACCEPTED" && <Button title="Create commitment" onPress={() => onCreate(row.id)} />}
       {availableConnectionActions(row, data.userId).map(action => <Button key={action} title={actionLabel(action, row)}
         variant={action === "accept" ? "primary" : "secondary"} disabled={data.busy || data.uncertain} onPress={() => setPending(action)} />)}
       {pending && <Confirm action={pending} row={row} onCancel={() => setPending(null)}

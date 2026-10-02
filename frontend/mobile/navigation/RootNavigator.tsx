@@ -7,6 +7,7 @@ import { Brand } from "../components/Brand";
 import { Body, Button, EmptyState, LoadingState, Screen, Title } from "../components/ui";
 import { AuthFlow } from "../features/auth/AuthFlow";
 import { useAuth } from "../features/auth/useAuth";
+import { Commitments } from "../features/commitments/Commitments";
 import { Connections } from "../features/connections/Connections";
 import { FoundationScreen } from "../app/FoundationScreen";
 export function RootNavigator() {
@@ -30,14 +31,14 @@ function Anonymous() {
 const tabs = ["Home", "Connections", "Activity", "Profile"] as const;
 function AuthenticatedShell() {
   const { state, session } = useAuth(); const [destination, setDestination] = useState<string>("Home");
+  const [commitmentEntry, setCommitmentEntry] = useState<{ connection?: string; key: number }>({ key: 0 });
   if (state.status !== "authenticated") return null;
   return <>
     <View style={styles.header}><Brand /><Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => setDestination("Notifications")} style={styles.entry}><Text style={styles.label}>🔔 Notifications</Text></Pressable></View>
-    {destination === "Connections" ? <Connections key={state.user.id} /> : <Screen><Title>{destination}</Title><Body>Welcome, {state.user.display_name}.</Body><EmptyState title="Your account is ready." message="This destination is reserved for a future release." />
-      {destination === "Home" && <Button title="Create commitment · future release" disabled onPress={() => {}} />}
+    {destination === "Connections" ? <Connections key={state.user.id} onCreate={connection => { setCommitmentEntry(previous => ({ connection, key: previous.key + 1 })); setDestination("Home"); }} /> : destination === "Home" ? <Commitments key={state.user.id + ":" + commitmentEntry.key} initialConnection={commitmentEntry.connection} onConnections={() => setDestination("Connections")} /> : <Screen><Title>{destination}</Title><Body>Welcome, {state.user.display_name}.</Body><EmptyState title="Your account is ready." message="This destination is reserved for a future release." />
       {destination === "Profile" && <Button title="Log out" variant="quiet" onPress={() => void session.logout()} />}
     </Screen>}
-    <View style={styles.tabs}>{tabs.map(tab => <Pressable key={tab} accessibilityRole="tab" accessibilityState={{ selected: tab === destination }} onPress={() => setDestination(tab)} style={styles.tab}><Text style={[styles.label, destination === tab && styles.selected]}>{tab}</Text></Pressable>)}</View>
+    <View style={styles.tabs}>{tabs.map(tab => <Pressable key={tab} accessibilityRole="tab" accessibilityState={{ selected: tab === destination }} onPress={() => { if (tab === "Home") setCommitmentEntry(previous => ({ key: previous.key + 1 })); setDestination(tab); }} style={styles.tab}><Text style={[styles.label, destination === tab && styles.selected]}>{tab}</Text></Pressable>)}</View>
   </>;
 }
 const styles = StyleSheet.create({
