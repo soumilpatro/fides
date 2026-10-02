@@ -393,3 +393,97 @@ FULLY_REPAID with the report action removed. The single focused review hardened
 successful-response action/status validation so malformed receipts retain intent,
 and verified failed-refresh action gating and stale-history withholding. Native
 calendar keyboard input and date input/change capture were also validated.
+
+## F5 — Dashboard and commitment history
+
+Overview on web and Home on mobile add independent read-only summary cards beside
+the existing commitments and Create commitment entry. GET /api/v1/summary has
+no query or body. Its exact response is {currencies:[...]} with INR, USD, GBP
+in that order, including zero buckets. Each has currency,
+borrowed_outstanding_minor, lent_outstanding_minor and signed net_position_minor.
+All three values are displayed directly from the server as “Verified outstanding”,
+based on verified repayments. Pending/disputed reports are not subtracted locally.
+There is no combined total, conversion, FX, local balance reconstruction or
+positive/negative good/bad styling. Refresh summary clears stale values; summary
+and commitment-list failures are independent. No automatic polling.
+
+GET /api/v1/commitments/{UUID}/ledger returns {items,next_cursor}. The shared
+closed discriminated projections cover COMMITMENT_PROPOSED, CONFIRMED, REJECTED,
+CANCELLED and REPAYMENT_REPORTED, VERIFIED, DISPUTED (each full event type has its
+COMMITMENT_ or REPAYMENT_ prefix). Actor is only id/display_name. Notes, phone,
+raw event_payload, audit metadata, request IDs and credential fields are omitted.
+Merged EXTENSION_REQUESTED/ACCEPTED/REJECTED variants are decoded for compatibility
+and rendered as neutral read-only due-date history; no extension APIs or actions.
+
+Commitment Detail has history; Activity is a commitment history index, using the
+existing commitment list and only the selected commitment's ledger. Web selection
+uses /app/activity/[id]; native selection stays feature-local inside the existing
+Activity tab. Four native tabs and five web destinations remain. Repayment rows
+may link to the existing F4 detail without per-row verification-history fetches.
+History authorization never depends on current Connections status.
+
+Timeline order remains occurred_at ASC then id ASC, oldest first. Initial limit
+is 50; Load more forwards the opaque next_cursor, appends in server order and
+deduplicates by event ID only. A failed page retains rows/cursor for explicit
+retry. Refresh history discards the old chain and starts at the first page.
+Pages are live keyset reads, not a fixed snapshot or causal/commit-order promise.
+Reported and verified are distinct events. A verification's resulting outstanding
+is labelled “Verified outstanding after this event”; it never replaces the
+current GET /summary values or current commitment state.
+
+No global recent-activity endpoint exists: Activity is recorded separately for
+each commitment. No global ledger fan-out, updated_at synthetic events or
+nonexistent /activity, /me/activity or /dashboard/activity calls. There is no
+merged upcoming/overdue summary contract, so neither card is present. Raw due
+dates stay due dates; no device-date/grace/default classification. An explicitly
+server-returned installment OVERDUE or commitment DEFAULTED label remains visible
+without deriving policy.
+
+The existing relay adds only GET /summary (no query) and GET
+/commitments/{UUID}/ledger (only limit 1–100 decimal integer and bounded opaque
+cursor). Other query keys, duplicate F5 keys and F5 mutation methods are denied.
+Bearer/no-store, cookie exclusion and existing F3/F4 write keys are unchanged.
+The shared transport validates routing against the path portion, allowing
+percent-encoded opaque cursor characters in the query without path traversal.
+
+Validation from frontend/: npm run test:auth, npm run test:connections,
+npm run test:commitments, npm run test:repayments, npm run test:dashboard,
+npm run test:dashboard:live, npm run lint, npm run typecheck, npm run build:web,
+npm run config --workspace=@fides/mobile. From frontend/mobile/:
+npx expo install --check; npx expo export --platform ios --output-dir dist/ios.
+The live runner uses the unchanged backend launched from Fides-F5/backend, existing
+fake provider codes, local migration 012 and three disposable users, logged out
+finally. Its separate loopback auth client isolates the request budget from
+earlier local fixtures; fake provider reference collisions can require bounded
+503 retries. No backend source or database configuration changes.
+
+npm run preview:dashboard serves ephemeral visual fixtures at localhost:8769;
+point process-only relay/Expo base URLs there. Existing documented fixture login
+is +12025550101 with code 654321. /__fixture/reset supports mixed/empty;
+mode also supports summary-error, history-error, history-empty, page-error and
+slow. Fixture summary values are explicit test-server values, not production
+frontend accounting. /__fixture/reads exposes only request paths for fan-out review.
+
+Zero new dependencies or version changes. Existing Expo 57.0.25 vs ~57.0.26 is a
+non-blocking follow-up; no upgrade. Record Loop production asset and native
+physical-device secure-storage validation remain separate known items.
+F5 is based only on merged origin/main in Fides-F5; Fides-B14 remains untouched.
+No backend/tests/models/migrations/index/dependency/specification/DECISIONS changes,
+B14-only commits, F6+, extension workflows, notification UI, profile expansion,
+mutual closure, settlement, waiver, forgiveness, financial writes, payments,
+client balance accounting, cross-currency netting, overdue/default policy or
+upcoming/needs-attention dashboard are included.
+
+F5 completion: 145 focused tests and F1–F4 regressions (25/68/135/157) passed,
+530 total, zero failures/skips. Live current-main backend validation passed 29
+checks. Lint, all workspace typechecks, production web build, Expo configuration,
+iOS export and git diff --check passed. Expo compatibility exits 1 solely for the
+unchanged patch recommendation above. Desktop and phone-size native-web review
+covered mixed/signed/zero currencies, independent summary errors, empty Activity,
+selected timelines, report/verify/dispute labels, repayment links, history errors,
+empty history, page failure/retry (50 then 56 rows), and Refresh resetting to 50.
+Keyboard refresh and existing commitment-detail history access were verified.
+The focused review corrected routing guards to validate pathname separately from
+opaque query data; traversal/auth transport regressions remain green. No full
+backend suite was run solely for F5. npm ci reported 12 findings in the unchanged
+lockfile (8 moderate, 4 high); no dependency remediation was bundled with F5.

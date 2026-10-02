@@ -28,11 +28,12 @@ export function createApiClient(config: {
     options: RequestOptions<TBody> = {},
   ): Promise<TResponse> {
     // Keep bearer credentials pinned to the configured origin and API prefix.
+    const pathname = path.split("?")[0];
     if (
-      !/^\/[a-zA-Z0-9]/.test(path) ||
-      path.includes("\\") ||
-      /(?:^|\/)\.{1,2}(?:\/|$)/.test(path) ||
-      /%2e|%2f|%5c/i.test(path)
+      !/^\/[a-zA-Z0-9]/.test(pathname) ||
+      pathname.includes("\\") ||
+      /(?:^|\/)\.{1,2}(?:\/|$)/.test(pathname) ||
+      /%2e|%2f|%5c/i.test(pathname)
     )
       throw new Error("Expected an API-relative path");
     const method = options.method ?? "GET";

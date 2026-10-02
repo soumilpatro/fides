@@ -25,7 +25,10 @@
     "preview:commitments": "node tests/commitments-preview.cjs",
     "test:repayments": "node --test tests/repayments.test.cjs",
     "test:repayments:live": "node tests/repayments-live.cjs",
-    "preview:repayments": "node tests/repayments-preview.cjs"
+    "preview:repayments": "node tests/repayments-preview.cjs",
+    "test:dashboard": "node --test tests/dashboard.test.cjs",
+    "test:dashboard:live": "node tests/dashboard-live.cjs",
+    "preview:dashboard": "node tests/dashboard-preview.cjs"
   },
   "devDependencies": {
     "typescript": "~6.0.3"
