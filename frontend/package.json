@@ -28,7 +28,12 @@
     "preview:repayments": "node tests/repayments-preview.cjs",
     "test:dashboard": "node --test tests/dashboard.test.cjs",
     "test:dashboard:live": "node tests/dashboard-live.cjs",
-    "preview:dashboard": "node tests/dashboard-preview.cjs"
+    "preview:dashboard": "node tests/dashboard-preview.cjs",
+    "test:extensions": "node --test tests/extensions.test.cjs",
+    "test:notifications": "node --test tests/notifications.test.cjs",
+    "test:profile": "node --test tests/profile.test.cjs",
+    "test:mvp:live": "node tests/mvp-live.cjs",
+    "preview:mvp": "node tests/mvp-preview.cjs"
   },
   "devDependencies": {
     "typescript": "~6.0.3"

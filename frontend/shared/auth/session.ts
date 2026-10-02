@@ -111,6 +111,13 @@ export class AuthSession {
     }).finally(() => { this.recovery = null; });
     return this.recovery;
   };
+  reconcileUser = (user: CurrentUser) => {
+    if (this.state.status !== "authenticated" || this.state.user.id !== user.id || user.status !== "ACTIVE") throw new Error("Unavailable account.");
+    this.publish({status:"authenticated",user});
+  };
+  clearDeactivated = () => this.exclusive(async () => {
+    try { await this.clear(); } finally { this.publish({status:"anonymous"}); }
+  });
   logout = () => this.exclusive(async () => {
     this.publish({ status: "loading" });
     try { if (this.credentials) await this.api.logout(); }

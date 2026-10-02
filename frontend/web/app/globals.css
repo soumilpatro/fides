@@ -447,3 +447,18 @@ main {
 .installment-display { border-top: 1px solid var(--border); padding-top: var(--space-md); }
 .installment-date-row { display: grid; gap: var(--space-sm); }
 .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:24px}.history-list{list-style:none;padding:0;margin:0;display:grid;gap:16px}.history-list time{font-size:12px}.summary-grid dd{margin-left:0;font-variant-numeric:tabular-nums}
+
+/* Frozen F6 polish, scoped to the new bounded surfaces. */
+.f6-stack{display:grid;gap:24px;min-width:0;max-width:960px}
+.f6-stack .card{height:auto}.f6-wrap,.f6-stack dd,.f6-stack p{overflow-wrap:anywhere}
+.f6-stack p{line-height:24px}.f6-stack h1{font-size:32px;line-height:40px}
+.f6-stack h2{font-size:20px;line-height:28px}
+.notification-list{list-style:none;padding:0;margin:0;display:grid;gap:16px}
+.notification-list .button{width:100%;justify-content:flex-start;text-align:left;white-space:normal}
+.unread-dot{display:inline-block;width:8px;height:8px;background:var(--signal);border-radius:999px;margin-right:8px}
+.button--destructive{color:#9D2E3B;background:#FCEBED;border-color:#E9A0AA}
+.f6-dialog{max-height:calc(100dvh - 48px);overflow-y:auto}
+.f6-dialog .field{margin-block:24px}
+.f6-stack .button,.f6-dialog .button{transition:background-color 160ms,color 160ms}
+.f6-stack .button:hover:not(:disabled),.f6-dialog .button:hover:not(:disabled){filter:brightness(.97)}
+@media(prefers-reduced-motion:reduce){.f6-stack .button,.f6-dialog .button{transition:none}}
