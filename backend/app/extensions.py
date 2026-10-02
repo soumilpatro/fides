@@ -16,6 +16,7 @@ from app.auth.safety import auth_operation, utc_now
 from app.commitments import CommitmentService
 from app.core.errors import AuthError, FinancialError
 from app.core.logging import sanitize_request_id
+from app.core.reliability import transaction
 from app.idempotency import Idempotency
 from app.models.audit_log import AuditLog
 from app.models.commitment import Commitment
@@ -221,7 +222,7 @@ class ExtensionService:
             return 201, self._response(db, row, parent)
 
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "extensions") as db:
                 return self.idempotency.execute(
                     db,
                     principal,
@@ -297,7 +298,7 @@ class ExtensionService:
             )
 
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "extensions") as db:
                 return self.idempotency.execute(
                     db,
                     principal,
@@ -315,7 +316,7 @@ class ExtensionService:
     @auth_operation
     def list(self, principal, identifier):
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "extensions") as db:
                 self.authorization.commitment(db, principal, identifier, lock=True)
                 parent = db.get(Commitment, identifier)
                 rows = db.scalars(

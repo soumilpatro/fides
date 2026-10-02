@@ -16,6 +16,7 @@ from app.auth.safety import auth_operation, utc_now
 from app.commitments import CommitmentService
 from app.core.errors import AuthError, FinancialError, VerificationError
 from app.core.logging import sanitize_request_id
+from app.core.reliability import transaction
 from app.idempotency import Idempotency
 from app.models.audit_log import AuditLog
 from app.models.commitment import Commitment
@@ -185,7 +186,7 @@ class VerificationService:
             )
 
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "verification") as db:
                 result = self.idempotency.execute(
                     db,
                     principal,
@@ -204,7 +205,7 @@ class VerificationService:
     @auth_operation
     def history(self, principal, identifier):
         try:
-            with self.sessions.sessions.begin() as db:
+            with transaction(self.sessions.sessions, "verification") as db:
                 access = self.authorization.repayment(db, principal, identifier, lock=True)
                 rows = validate_history(
                     db, db.get(Repayment, identifier), db.get(Commitment, access.commitment_id)
