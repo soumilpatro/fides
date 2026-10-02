@@ -6508,3 +6508,45 @@ Do not include new endpoints, F1/frontend work, settlement/waiver, overdue/defau
 ### 23. Validation expectation
 
 B13 implementation must eventually run focused B13 reliability tests, affected B2–B12 regressions, the full backend suite, Ruff, formatter check, `pip check`, and `git diff --check`. No wholesale skips.
+
+## B14-D0 — APPROVED — Security Hardening Contract
+
+B14 is a bounded security-hardening pass. Its objective is to inspect, verify, test, and fix demonstrated security defects while preserving the current approved product, API, and financial behavior.
+
+### Audit scope
+
+The read-only audit and any later approved implementation may cover:
+
+- authorization and IDOR boundaries across accounts, connections, commitments, repayments, verification/dispute, ledger/history, extensions, notifications, profiles, summaries, and UUID-addressable resources;
+- OTP authentication, session and token issuance/revocation, deactivated-account behavior, revalidation, authentication failures, and sensitive-value handling;
+- FastAPI/Pydantic validation, malformed identifiers, oversized strings and pages, malformed money/currency/date/timezone input, and request-size protection, with an approximately 1 MiB production request ceiling unless the architecture requires a smaller approved limit;
+- production CORS, browser-facing behavior, and security headers appropriate to the bearer-token architecture;
+- secrets and configuration, logging and error handling, proxy/deployment assumptions, health/readiness exposure, database least privilege, and declared dependency risk; and
+- security testing for IDOR, unauthorized participant access, auth/session misuse, malformed or oversized requests, production configuration failures, CORS, secret/log leakage, privacy-safe unavailable/not-found behavior, financial invariants, and B13 reliability behavior.
+
+### Explicit exclusions
+
+B14 must not redesign authentication, add OAuth/social login, MFA, passwords, new product features, frontend functionality, Mutual Closure, reminders, notification preferences, Upcoming/Overdue behavior, or infrastructure without demonstrated need. It must not change financial semantics, money calculations, commitment lifecycle, repayment verification, extension rules, or B13 concurrency, idempotency, isolation, and reliability behavior. It must not introduce migrations, dependencies, indexes, or other schema changes unless a later audited defect absolutely requires one and approval is obtained first.
+
+### Stop conditions
+
+If a demonstrated defect requires an API contract change, migration or other schema change, new dependency, authentication-architecture change, financial-behavior change, or substantial infrastructure change, stop and request approval before implementation. Do not fix hypothetical or speculative issues.
+
+### Production security gate
+
+The production gate is fail-closed configuration, safe authentication and session handling, privacy-preserving authorization and errors, no sensitive secret or financial-data leakage, appropriate CORS and security headers, safe proxy and health assumptions, least-privilege runtime expectations, and focused regression evidence. Existing approved behavior remains authoritative unless a demonstrated security defect is fixed through the bounded process.
+
+Only demonstrated defects may be fixed. Every fix requires a focused test, demonstration of the prior result, the smallest in-scope change, and affected regression tests. Preserve B13 transaction, isolation, lock-ordering, idempotency, and diagnostic behavior.
+
+### B14 execution order
+
+1. Approved docs checkpoint.
+2. Read-only security audit.
+3. Review audit findings.
+4. Approve a bounded implementation plan.
+5. Implement demonstrated fixes.
+6. Run focused security tests.
+7. Run full backend regression.
+8. Perform the final security gate.
+
+No implementation occurs before step 4.
