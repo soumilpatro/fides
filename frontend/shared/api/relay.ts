@@ -35,7 +35,16 @@ export function isAllowedApiRoute(method: string, path: string[]) {
 
 // F5 read query allowlist; all earlier routes retain their existing contracts.
 export function isAllowedApiQuery(path:string[],query:URLSearchParams){
- if(path.length===1&&path[0]==="summary")return query.size===0;\n if(path.length===2&&path[0]==="summary"&&["upcoming","overdue"].includes(path[1])){\n  for(const [key,value] of query){\n   if(query.getAll(key).length!==1)return false;\n   if(key==="limit"){if(!/^[0-9]+$/.test(value)||Number(value)<1||Number(value)>100)return false;}\n   else if(key==="cursor"){if(!value.length||value.length>512||/[\\u0000-\\u001f\\u007f]/.test(value))return false;}\n   else return false;\n  }\n  return true;\n }
+ if(path.length===1&&path[0]==="summary")return query.size===0;
+ if(path.length===2&&path[0]==="summary"&&["upcoming","overdue"].includes(path[1])){
+  for(const [key,value] of query){
+   if(query.getAll(key).length!==1)return false;
+   if(key==="limit"){if(!/^[0-9]+$/.test(value)||Number(value)<1||Number(value)>100)return false;}
+   else if(key==="cursor"){if(!value.length||value.length>512||/[\\u0000-\\u001f\\u007f]/.test(value))return false;}
+   else return false;
+  }
+  return true;
+ }
  if(path[0]==="me"||path[0]==="notification-preferences"||path[0]==="extension-requests"||path[0]==="closure-requests"||path[0]==="notifications"&&path.length>1||path[0]==="commitments"&&["extension-requests","closure-requests"].includes(path[2]))return query.size===0;
  if(!(path.length===1&&path[0]==="notifications")&&(path.length!==3||path[0]!=="commitments"||path[2]!=="ledger"))return true;
  for(const [key,value] of query){
