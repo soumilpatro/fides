@@ -26,32 +26,33 @@ const text=(v:unknown)=>typeof v==="string"&&v.length>0?v:fail();
 const date=(v:unknown)=>typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+"T00:00:00Z"))?v:fail();
 
 export function dueSummaryItemResponse(value:unknown):DueSummaryItem{
-  const row=object(value),person=object(row.counterparty),amount=row.verified_outstanding_minor;
+  const row=object(value),person=object(row.counterparty),amount=row.verified_outstanding_minor,role=row.role,currency=row.currency,scheduleMode=row.schedule_mode;
   if(typeof amount!=="number"||!Number.isSafeInteger(amount)||amount<1)fail();
-  if(row.role!=="BORROWER"&&row.role!=="LENDER")fail();
-  if(row.currency!=="INR"&&row.currency!=="USD"&&row.currency!=="GBP")fail();
-  if(row.schedule_mode!=="single"&&row.schedule_mode!=="installments")fail();
+  if(role!=="BORROWER"&&role!=="LENDER")fail();
+  if(currency!=="INR"&&currency!=="USD"&&currency!=="GBP")fail();
+  if(scheduleMode!=="single"&&scheduleMode!=="installments")fail();
   if(row.installment_id!==null&&!(typeof row.installment_id==="string"&&connectionUuid.test(row.installment_id)))fail();
-  if(row.schedule_mode==="single"&&row.installment_id!==null)fail();
-  if(row.schedule_mode==="installments"&&row.installment_id===null)fail();
+  if(scheduleMode==="single"&&row.installment_id!==null)fail();
+  if(scheduleMode==="installments"&&row.installment_id===null)fail();
   return {
     commitment_id:uuid(row.commitment_id),
     counterparty:{id:uuid(person.id),display_name:text(person.display_name)},
-    role:row.role,
-    currency:row.currency,
-    verified_outstanding_minor:amount,
+    role,
+    currency,
+    verified_outstanding_minor:amount as number,
     due_date:date(row.due_date),
     due_timezone:text(row.due_timezone),
-    schedule_mode:row.schedule_mode,
+    schedule_mode:scheduleMode,
     installment_id:row.installment_id as string|null,
   };
 }
 export function dueSummaryPageResponse(value:unknown):DueSummaryPage{
   const row=object(value);
-  if(!Array.isArray(row.items))fail();
+  const items=row.items;
+  if(!Array.isArray(items))fail();
   const cursor=row.next_cursor;
   if(!(cursor===null||typeof cursor==="string"&&cursor.length>0&&cursor.length<=512&&!/[\u0000-\u001f\u007f]/.test(cursor)))fail();
-  return {items:row.items.map(dueSummaryItemResponse),next_cursor:cursor as string|null};
+  return {items:items.map(dueSummaryItemResponse),next_cursor:cursor as string|null};
 }
 export function appendDueSummary(previous:DueSummaryItem[],incoming:DueSummaryItem[]){
   const keys=new Set(previous.map(item=>(item.installment_id??item.commitment_id)+":"+item.due_date));
