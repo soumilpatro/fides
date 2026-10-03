@@ -2,15 +2,15 @@ from copy import deepcopy
 from datetime import timedelta
 
 import pytest
-from pydantic import ValidationError
-from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
-
 from app.api.summary import get_summary_service
 from app.api.summary_schemas import MAX_SAFE_INTEGER, SummaryResponse
 from app.main import create_app
 from app.models.auth_session import AuthSession
 from app.models.user import User
+from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
+
 from .conftest import read
 
 ZERO = {
@@ -100,13 +100,26 @@ def test_authentication(ctx, kind, expected):
 
 def test_openapi():
     spec = create_app().openapi()
-    assert {path for path in spec["paths"] if "/summary" in path} == {"/api/v1/summary"}
+    assert {path for path in spec["paths"] if "/summary" in path} == {
+        "/api/v1/summary",
+        "/api/v1/summary/upcoming",
+        "/api/v1/summary/overdue",
+    }
     path = spec["paths"]["/api/v1/summary"]
     assert set(path) == {"get"}
     op = path["get"]
     assert op["security"] == [{"HTTPBearer": []}]
     assert not op.get("parameters") and "requestBody" not in op
-    assert set(op["responses"]) == {"200", "400", "401", "403", "413", "422", "500", "503"}
+    assert set(op["responses"]) == {
+        "200",
+        "400",
+        "401",
+        "403",
+        "413",
+        "422",
+        "500",
+        "503",
+    }
     for response in op["responses"].values():
         assert {"Cache-Control", "X-Request-ID"} <= set(response["headers"])
     schemas = spec["components"]["schemas"]
@@ -204,7 +217,7 @@ def test_no_idempotency_or_private_fields(b7):
         assert private not in result.text
 
 
-@pytest.mark.parametrize("path", ["borrowed", "lent", "upcoming", "overdue", "activity"])
+@pytest.mark.parametrize("path", ["borrowed", "lent", "activity"])
 def test_deferred_routes(ctx, path):
     assert (
         ctx.api.client.get("/api/v1/summary/" + path, headers=ctx.headers["A"]).status_code == 404
