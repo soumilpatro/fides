@@ -6899,3 +6899,23 @@ For overdue reminders, `E = due_date + grace_period_days + 1` calendar day. For 
 ### J. Core invariant
 
 System reminder notifications are distinguishable from human workflow notifications without fabricating an actor, while preserving all existing workflow response behavior and keeping historical reminder rows safely readable.
+
+## B11-R / Notification Preferences implementation record
+
+The approved T0 and Response Compatibility D0 contracts are implemented with additive revision `013` (parent `012`). This adds the preference table, nullable `VARCHAR(160)` dedupe key, named unique/CHECK constraints, and notification retention index. No commitment scan index was added without demonstrated need. Existing workflow rows are not rewritten. Upgrade refuses pre-existing reminder rows; downgrade refuses populated preferences or keyed/reminder rows until an operator explicitly archives/removes that new data.
+
+The current-user GET/POST preference API uses strict complete booleans, side-effect-free true/true defaults, current-session revalidation, and PostgreSQL upsert/RETURNING. Mandatory workflow notification creation does not consult preferences.
+
+The one-shot command is `python -m app.jobs.reminders` from `backend/`. A finite UUID frontier and pages of up to 100 commitments bound memory. Financial inputs, current effective terms, recipient activity, preferences, and schedules are batched into a single statement snapshot. The existing `validate_terms` and exact `accounting` helpers are reused. Final INSERT SELECT rechecks the validated state and execution-time current terms/local day, with no explicit financial/advisory locks. PostgreSQL uniqueness and normal FK enforcement handle overlap. Corrupt candidates fail closed with bounded diagnostics and a non-zero partial-failure job exit.
+
+Reminder identity is `r1|recipient_uuid|type|commitment_uuid|installment_uuid_or_-|YYYY-MM-DD`. Only conflicts on `uq_notification_events_dedupe_key` are no-ops. Overdue uses `E = due_date + grace_period_days + 1 calendar day` and `S = E + 7 * floor((T - E).days / 7)` for borrower-local `T >= E`; only S is emitted. No stale Upcoming/Due backfill occurs. Contractual due timezone is preserved. Current-version installments provide dates/identity only, with no payment allocation or financial unpaid claim.
+
+System reminder projection has null actor and commitment-only targeting; existing workflow actors remain non-null. Historical reminder readability depends on ownership/static provenance, not later repayment, terms, or commitment eligibility. Existing inbox ordering, cursor/read behavior, and workflow atomicity are preserved.
+
+The separate one-shot command `python -m app.jobs.notification_cleanup` removes only NotificationEvent rows strictly older than 90 days, read/unread equally, in short SKIP LOCKED transactions of up to 1,000 rows and at most 100 batches per invocation. Preferences, financial objects, ledger, and audit are unaffected. Production cleanup should use a separately privileged maintenance credential; B15 owns scheduling, monitoring, and production least-privilege validation.
+
+Operational details and frontend coordination are documented in `docs/reminders.md`. Frontend reminder type/null-actor support is a separate track and must precede enabling reminder delivery. No frontend, auth redesign, financial semantics, B13 lock/idempotency behavior, broker, channel/provider, or dependency changes are included.
+
+Validation on the existing local `fides_test` PostgreSQL database: 129 focused reminder/preference tests passed, including 16 concurrency, 7 migration, and 9 retention tests; the existing notification HTTP/OpenAPI contract suite passed all 36 tests. The final full backend regression passed 2,762 tests with zero failures or skips, covering mandatory workflows, B2-B14 regressions, and financial invariants. Alembic repository/test-database head is `013`; migration tests verify `012 -> 013`, preserved workflow data, metadata/constraints, pre-existing reminder refusal, and downgrade data-loss guards. Both one-shot job commands exited 0 on an empty test inbox, with zero created/deleted rows.
+
+Ruff and formatter checks passed for all 31 changed/new Python files; `pip check` and `git diff --check` passed. No separate type checker is configured. Repository-wide Ruff retains seven pre-existing I001 import-order findings in unchanged B12 summary tests; they are outside this change. The existing Starlette/AnyIO BlockingPortal deprecation warning is non-blocking. B15 scheduling/least privilege and separate frontend reminder compatibility remain release coordination items.

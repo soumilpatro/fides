@@ -20,7 +20,9 @@ FIELDS = {
 
 def test_openapi():
     spec = create_app().openapi()
-    assert {p: set(v) for p, v in spec["paths"].items() if "notif" in p} == {
+    assert {
+        p: set(v) for p, v in spec["paths"].items() if p == BASE or p.startswith(BASE + "/")
+    } == {
         BASE: {"get"},
         BASE + "/{id}/read": {"post"},
     }
@@ -28,7 +30,12 @@ def test_openapi():
     row = schemas["NotificationResponse"]
     assert set(row["properties"]) == set(row["required"]) == FIELDS
     assert row["additionalProperties"] is False
-    assert set(row["properties"]["type"]["enum"]) == set(TYPES)
+    assert set(row["properties"]["type"]["enum"]) == set(TYPES) | {
+        "UPCOMING_DUE",
+        "DUE_TODAY",
+        "OVERDUE",
+    }
+    assert any(part.get("type") == "null" for part in row["properties"]["actor"]["anyOf"])
     assert set(schemas["NotificationListResponse"]["properties"]) == {"items", "next_cursor"}
     for path, method in [(BASE, "get"), (BASE + "/{id}/read", "post")]:
         op = spec["paths"][path][method]
@@ -123,8 +130,8 @@ def test_exact_response_headers_no_key(inbox, request_id):
         ("POST", BASE + "/" + str(uuid4()) + "/unread"),
         ("PATCH", BASE + "/" + str(uuid4())),
         ("DELETE", BASE + "/" + str(uuid4())),
-        ("GET", "/api/v1/notification-preferences"),
-        ("POST", "/api/v1/notification-preferences"),
+        ("PATCH", "/api/v1/notification-preferences"),
+        ("DELETE", "/api/v1/notification-preferences"),
         ("POST", "/api/v1/push-tokens"),
         ("GET", "/api/v1/reminders"),
         ("GET", "/api/v1/admin/notifications"),

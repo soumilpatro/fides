@@ -9,7 +9,7 @@ import base64
 import binascii
 import json
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import get_args
 from uuid import UUID
 
@@ -26,11 +26,15 @@ from app.auth.safety import auth_operation, utc_now
 from app.core.errors import AuthError, ResourceUnavailable
 from app.ledger import _project as project_ledger_events
 from app.models.commitment import Commitment
+from app.models.commitment_installment import CommitmentInstallment
+from app.models.commitment_terms_version import CommitmentTermsVersion
 from app.models.enums import NotificationStatus
 from app.models.ledger_event import LedgerEvent
 from app.models.notification_event import NotificationEvent
+from app.reminders import REMINDER_TYPES, dedupe_key
 
 TYPES = frozenset(get_args(NotificationType))
+WORKFLOW_TYPES = TYPES - REMINDER_TYPES
 
 
 def _require(condition):
@@ -39,7 +43,7 @@ def _require(condition):
 
 
 def _source(event):
-    _require(event.event_type in TYPES)
+    _require(event.event_type in WORKFLOW_TYPES)
     if event.event_type.startswith("COMMITMENT_"):
         return "Commitment", event.commitment_id
     if event.event_type.startswith("REPAYMENT_"):
@@ -108,10 +112,10 @@ def decode_cursor(value, user_id):
         raise AuthError("VALIDATION_ERROR") from None
 
 
-def project_notifications(db, rows, user_id):
+def _project_workflows(db, rows, user_id):
     sources = {}
     for row in rows:
-        _require(row.user_id == user_id and row.type in TYPES)
+        _require(row.user_id == user_id and row.type in WORKFLOW_TYPES)
         _require(row.sent_at is None and row.scheduled_at is None)
         _require(
             (row.status == NotificationStatus.DELIVERED and row.read_at is None)
@@ -174,6 +178,106 @@ def project_notifications(db, rows, user_id):
             )
         )
     return result
+
+
+def _project_reminders(db, rows, user_id):
+    """Validate historical provenance only; later eligibility changes are irrelevant."""
+    if not rows:
+        return []
+    parents = {
+        p.id: p
+        for p in db.scalars(
+            select(Commitment).where(Commitment.id.in_({r.object_id for r in rows}))
+        )
+    }
+    terms_ids, installment_ids = set(), set()
+    for row in rows:
+        _require(row.user_id == user_id and row.type in REMINDER_TYPES)
+        _require(row.object_type == "Commitment" and row.object_id in parents)
+        _require(row.scheduled_at is None and row.sent_at is None)
+        _require(
+            (row.status == NotificationStatus.DELIVERED and row.read_at is None)
+            or (
+                row.status == NotificationStatus.READ
+                and row.read_at is not None
+                and row.read_at >= row.created_at
+            )
+        )
+        _require(
+            type(row.payload) is dict
+            and set(row.payload)
+            == {
+                "terms_version_id",
+                "installment_id",
+                "scheduled_local_date",
+            }
+        )
+        _require(type(row.payload["terms_version_id"]) is str)
+        terms_ids.add(UUID(row.payload["terms_version_id"]))
+        installment = row.payload["installment_id"]
+        _require(installment is None or type(installment) is str)
+        if installment is not None:
+            installment_ids.add(UUID(installment))
+    terms = {
+        t.id: t
+        for t in db.scalars(
+            select(CommitmentTermsVersion).where(CommitmentTermsVersion.id.in_(terms_ids))
+        )
+    }
+    installments = {
+        i.id: i
+        for i in db.scalars(
+            select(CommitmentInstallment).where(CommitmentInstallment.id.in_(installment_ids))
+        )
+    }
+    result = []
+    for row in rows:
+        parent = parents[row.object_id]
+        recipients = {parent.borrower_user_id}
+        if row.type == "OVERDUE":
+            recipients.add(parent.lender_user_id)
+        _require(user_id in recipients and parent.borrower_user_id != parent.lender_user_id)
+        term_id = UUID(row.payload["terms_version_id"])
+        _require(str(term_id) == row.payload["terms_version_id"])
+        _require(term_id in terms and terms[term_id].commitment_id == parent.id)
+        installment = row.payload["installment_id"]
+        if installment is not None:
+            identifier = UUID(installment)
+            _require(str(identifier) == installment and identifier in installments)
+            _require(installments[identifier].terms_version_id == term_id)
+            _require(installments[identifier].commitment_id == parent.id)
+        stamp = row.payload["scheduled_local_date"]
+        _require(type(stamp) is str)
+        local_date = date.fromisoformat(stamp)
+        _require(local_date.isoformat() == stamp)
+        _require(
+            row.dedupe_key == dedupe_key(user_id, row.type, parent.id, installment, local_date)
+        )
+        result.append(
+            NotificationResponse(
+                id=row.id,
+                type=row.type,
+                actor=None,
+                commitment_id=parent.id,
+                repayment_id=None,
+                extension_request_id=None,
+                created_at=row.created_at,
+                read_at=row.read_at,
+            )
+        )
+    return result
+
+
+def project_notifications(db, rows, user_id):
+    workflows = [r for r in rows if r.type not in REMINDER_TYPES]
+    reminders = [r for r in rows if r.type in REMINDER_TYPES]
+    items = {
+        item.id: item
+        for item in (
+            _project_workflows(db, workflows, user_id) + _project_reminders(db, reminders, user_id)
+        )
+    }
+    return [items[row.id] for row in rows]
 
 
 class NotificationService:
