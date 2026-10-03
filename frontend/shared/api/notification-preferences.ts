@@ -9,10 +9,11 @@ export interface NotificationPreferences {
 
 export function notificationPreferencesResponse(value:unknown):NotificationPreferences {
   const row=object(value);
-  if(typeof row.due_reminders_enabled!=="boolean"||typeof row.overdue_reminders_enabled!=="boolean")invalidResponse();
+  const dueRemindersEnabled=row.due_reminders_enabled,overdueRemindersEnabled=row.overdue_reminders_enabled;
+  if(typeof dueRemindersEnabled!=="boolean"||typeof overdueRemindersEnabled!=="boolean")invalidResponse();
   return {
-    due_reminders_enabled:row.due_reminders_enabled,
-    overdue_reminders_enabled:row.overdue_reminders_enabled,
+    due_reminders_enabled:dueRemindersEnabled as boolean,
+    overdue_reminders_enabled:overdueRemindersEnabled as boolean,
   };
 }
 
