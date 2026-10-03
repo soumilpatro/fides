@@ -87,17 +87,11 @@ small,
   gap: var(--space-sm);
   min-width: 0;
 }
-.brand-mark {
-  width: 40px;
+.brand-lockup-image {
+  width: 128px;
   height: auto;
+  display: block;
   flex: 0 0 auto;
-}
-.brand-name {
-  color: var(--ink);
-  font-size: var(--type-section);
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1;
 }
 .sidebar nav a {
   display: flex;
