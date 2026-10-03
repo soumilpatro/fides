@@ -1,10 +1,13 @@
 """Closed B12-D0 response, with exact currency order and safe JSON integers."""
 
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import Field, StrictInt, model_validator
 
-from app.api.auth_schemas import AuthSchema
+from app.api.auth_schemas import AuthSchema, Timezone
+from app.api.connection_schemas import ParticipantResponse
+from app.api.term_schemas import DateOnly
 
 MAX_SAFE_INTEGER = 2**53 - 1
 UnsignedMoney = Annotated[StrictInt, Field(ge=0, le=MAX_SAFE_INTEGER)]
@@ -37,3 +40,20 @@ class GBPSummary(CurrencySummary):
 
 class SummaryResponse(AuthSchema):
     currencies: tuple[INRSummary, USDSummary, GBPSummary]
+
+
+class OccurrenceItem(AuthSchema):
+    commitment_id: UUID
+    counterparty: ParticipantResponse
+    role: Literal["BORROWER", "LENDER"]
+    currency: Literal["INR", "USD", "GBP"]
+    verified_outstanding_minor: Annotated[StrictInt, Field(ge=1, le=MAX_SAFE_INTEGER)]
+    due_date: DateOnly
+    due_timezone: Timezone
+    schedule_mode: Literal["single", "installments"]
+    installment_id: UUID | None
+
+
+class OccurrenceResponse(AuthSchema):
+    items: list[OccurrenceItem]
+    next_cursor: str | None

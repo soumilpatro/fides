@@ -6997,3 +6997,149 @@ identified fixture records were cleaned only from fides_test before the final
 run. The existing Starlette deprecation warning and six import-order findings
 in untouched B12 tests remain non-blocking; one previously affected B12 file
 was necessarily updated for CLOSED exclusion and now passes changed-file checks.
+
+## Upcoming D0 — APPROVED
+
+Upcoming is server-derived. Frontend clients must not independently calculate
+upcoming commitments.
+
+The window is today through today plus 7 calendar days, inclusive, using the
+borrower due timezone from the authoritative current terms. Due today counts as
+Upcoming. Grace does not extend the window; after the due date a commitment may
+temporarily be neither Upcoming nor Overdue while still within grace.
+
+Only ACTIVE and PARTIALLY_REPAID commitments with positive authoritative
+verified outstanding are eligible. PENDING_CONFIRMATION, REJECTED, CANCELLED,
+FULLY_REPAID, CLOSED, and DEFAULTED are excluded. Commitments without a due
+date are excluded. Current authoritative/latest effective terms control the
+result, so accepted extensions change future derived results. Only VERIFIED
+repayments reduce outstanding; PENDING_VERIFICATION and DISPUTED repayments do
+not.
+
+Installment schedules may produce informational Upcoming occurrences. Do not
+claim installment unpaid amount, installment-level outstanding, or installment
+allocation without authoritative backend allocation. Do not aggregate upcoming
+money totals; expose commitment-level verified outstanding only. Order by
+earliest due date, then a stable deterministic identifier. The user-facing label
+is “Upcoming — next 7 days”.
+
+## Overdue D0 — APPROVED
+
+Overdue is server-derived and does not mutate Commitment.status. DEFAULTED is a
+separate state and is never automatic; overdue calculation must never mark a
+commitment DEFAULTED.
+
+Only ACTIVE and PARTIALLY_REPAID commitments with positive authoritative
+verified outstanding are eligible. Overdue starts at due_date plus the grace
+period plus one calendar day, using the borrower due timezone. No due date
+means never Overdue. Only VERIFIED repayments reduce authoritative outstanding;
+pending and disputed repayments do not, and zero verified outstanding removes
+the item from Overdue. Accepted extensions control the current due date.
+
+Installment occurrences may be surfaced conservatively without inferring or
+exposing installment-level unpaid monetary amounts. CLOSED commitments are
+excluded. Derived Overdue calculation has no side effects: it does not mutate
+status, append financial ledger events, create notifications, charge fees,
+change trust or reputation, or create DEFAULTED state.
+
+## Upcoming / Overdue API Technical Contract T0 — APPROVED
+
+The approved routes are:
+
+- `GET /api/v1/summary/upcoming`
+- `GET /api/v1/summary/overdue`
+
+Existing `GET /api/v1/summary` remains unchanged.
+
+Responses use the envelope `{ "items": [...], "next_cursor": "..." | null }`.
+The default limit is 50, the maximum is 100, and pagination uses an opaque
+keyset cursor with no offset pagination.
+
+Each item includes `commitment_id`, counterparty `id` and `display_name`, role
+(`BORROWER` or `LENDER`), currency, `verified_outstanding_minor`, `due_date`,
+`due_timezone`, `schedule_mode`, and `installment_id` (a UUID for an installment
+occurrence or null for a commitment-level occurrence). Optional derived fields
+such as `days_until_due` or `days_overdue` may be added only when necessary and
+bounded. No monetary installment-level fields are allowed.
+
+Upcoming and Overdue are authenticated, participant-scoped, read-only
+server-derived queries using current authoritative financial and terms state,
+borrower-local dates, existing accounting and corruption-safe validation
+helpers, bounded reads, stable ordering, and no writes. They must preserve B14
+no-store, security headers, correlation behavior, request limits, and raw-path
+classification. Upcoming covers borrower-local today through today plus 7 days,
+including today; Overdue requires borrower-local today to be at least due date
+plus grace plus one day and positive verified outstanding. Installment rows are
+schedule context only and never imply allocation.
+
+## Upcoming / Overdue API T0 — Implementation Clarifications APPROVED
+
+Overdue results are ordered by occurrence `due_date` ascending, then
+`commitment_id` ascending, then occurrence identifier ascending. The earliest
+overdue occurrence appears first. Non-installment occurrences use a stable
+non-null internal occurrence identifier for ordering and cursor purposes; it is
+not exposed unless already part of the approved response.
+
+Use the existing Fides opaque cursor convention: unsigned URL-safe Base64 JSON.
+The logical payload is `[version, principal_user_id, endpoint_kind, due_date,
+commitment_id, installment_id_or_null]`. Validation enforces the exact version
+and array shape, bounded length, canonical UUIDs and date, authenticated
+principal scope, endpoint kind exactly `UPCOMING` or `OVERDUE`, and a valid
+nullable installment ID. Malformed, non-canonical, wrong-principal, and
+wrong-endpoint cursors use the existing `422 VALIDATION_ERROR`. MVP does not
+require cryptographic signing, a signing secret, a dependency, or a general
+pagination framework; syntactically valid user-edited cursors are not promised
+cryptographic tamper detection.
+
+Pagination defaults to 50 and allows at most 100 results. There is no offset
+pagination. Each request scans at most 500 globally ordered candidate
+occurrences. It returns up to the requested number of eligible items. If the
+budget yields fewer items, including an empty page, the page may be short. If
+candidate space remains, `next_cursor` represents the last scanned candidate,
+not merely the last returned item, so continuation advances through the
+ordered candidate stream without unbounded rescanning.
+
+Pagination is live and provides no cross-page snapshot guarantee. Membership
+and ordering may change between requests because of repayments, pending or
+disputed resolution, accepted extensions, Mutual Closure, lifecycle changes, or
+borrower-local date transitions. Each request still uses one coherent
+evaluation instant and the authenticated-User read serialization protocol.
+
+Implementation must hold the authenticated User lock, capture one evaluation
+instant, preserve global due-date ordering, batch current terms, repayment
+aggregates and integrity checks, current installments, and participant
+projections, and avoid N+1 queries, unlimited history, and financial mutation
+locks. No migration or index is approved unless an actual query-plan blocker is
+demonstrated and implementation stops for approval.
+
+Affected principal/page corruption fails safely with the existing sanitized
+`SERVICE_UNAVAILABLE` behavior; corrupt financial state is not silently
+skipped. Bounded candidate/lookahead validation covers missing or future-only
+terms, invalid timezones, malformed schedule metadata, incomplete/excess or
+misassociated current installments, inconsistent installment dates/allocation
+persistence, invalid repayment currency or reporter, impossible participants,
+missing counterparty, accounting inconsistency, and date overflow. Unrelated
+users' corruption must not affect the authenticated principal.
+
+Only persisted `CommitmentInstallment` IDs from the current authoritative
+TermsVersion may be used. Installment status is not payment allocation truth;
+occurrences are informational and have no installment-level unpaid amount.
+Historical TermsVersion installments never appear. Current-version installment
+rows are invalid stored state for `NONE` and `SINGLE` schedules.
+
+Both endpoints are strictly read-only: no commitment status or DEFAULTED change,
+ledger, audit, notification, reminder, repayment-allocation, terms, or
+installment writes, and no financial mutation locks.
+
+Final implementation flow: docs correction checkpoint; bounded schemas/cursor;
+dedicated read-only occurrence service; globally ordered bounded candidate
+query; batched authoritative projection/accounting; two summary routes; focused
+eligibility, installment, pagination, and integrity tests; concurrency/security
+tests; relevant regression; full backend regression; focused self-review;
+checkpoint; merge only after approval.
+
+Implementation stops for approval if it requires an unjustified
+migration/index, dependency, cryptographic cursor infrastructure, financial
+formula or repayment-allocation change, reminder behavior or B13 lock-order
+change, Commitment.status mutation, automatic DEFAULTED, existing summary
+response change, new public error, frontend change, or unbounded scanning.
