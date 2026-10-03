@@ -1,3 +1,5 @@
+const fs=require('node:fs'),ts=require('typescript');
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,f);
 const test=require('node:test'),assert=require('node:assert/strict');
 const {createNotificationPreferencesApi,notificationPreferencesResponse}=require('../shared/api/notification-preferences.ts');
 const {isAllowedApiRoute,isAllowedApiQuery}=require('../shared/api/relay.ts');
