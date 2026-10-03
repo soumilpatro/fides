@@ -4,6 +4,7 @@ import { formatMoney } from "@fides/shared/domain/money";
 import type { DueSummaryPage } from "@fides/shared/api/due-summaries";
 import { dueDateLabel, dueInstallmentLabel, dueRoleLabel } from "@fides/shared/dashboard/due-presentation";
 import { Button, Card, EmptyState, ErrorState, LoadingState } from "../../components/ui";
+import { useDueSummaries } from "./useDueSummaries";
 
 export interface DueSectionState { data:DueSummaryPage|null; busy:boolean; error:string|null }
 
@@ -26,4 +27,7 @@ function DueSection({title,state,onRetry,onLoadMore}:{title:string;state:DueSect
 export function DueSummarySections(props:{upcoming:DueSectionState;overdue:DueSectionState;onRetryUpcoming:()=>void;onRetryOverdue:()=>void;onMoreUpcoming:()=>void;onMoreOverdue:()=>void}){
  return <><DueSection title="Upcoming — next 7 days" state={props.upcoming} onRetry={props.onRetryUpcoming} onLoadMore={props.onMoreUpcoming}/><DueSection title="Overdue" state={props.overdue} onRetry={props.onRetryOverdue} onLoadMore={props.onMoreOverdue}/></>;
 }
-// Prepared only. Do not mount until the corresponding backend endpoints are merged.
+export function DueSummaryOverview(){
+ const data=useDueSummaries();
+ return <DueSummarySections upcoming={data.upcoming} overdue={data.overdue} onRetryUpcoming={()=>void data.upcoming.refresh()} onRetryOverdue={()=>void data.overdue.refresh()} onMoreUpcoming={()=>void data.upcoming.loadMore()} onMoreOverdue={()=>void data.overdue.loadMore()}/>;
+}
