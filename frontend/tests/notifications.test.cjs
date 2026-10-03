@@ -1,8 +1,32 @@
-const {A,B,ID,E,notification,harness,settle}=require('./f6-harness.cjs'),test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
-const {createNotificationsApi,notificationResponse,notificationTypes}=require('../shared/api/notifications.ts'),{notificationText,notificationTarget,appendNotifications}=require('../shared/notifications/presentation.ts'),{isAllowedApiRoute,isAllowedApiQuery}=require('../shared/api/relay.ts');
-for(const type of notificationTypes)test('closed '+type+' projection/copy/target',()=>{const r=notification(type);assert.deepEqual(notificationResponse({...r,amount_minor:100,reason:'private',payload:{},actor:{...r.actor,phone:'private'}}),r);assert.ok(notificationText(r).startsWith('Morgan '));assert.ok(!/100|private/.test(notificationText(r)));assert.deepEqual(notificationTarget(r),type.startsWith('REPAYMENT_')?{page:'repayment',id:A,parent:ID}:{page:'commitment',id:ID,extension:type.startsWith('EXTENSION_')});});
+const {A,B,ID,E,notification,harness,settle}=require('./f6-harness.cjs'),test=require('node:test'),assert=require('node:assert/strict');
+const {createNotificationsApi,notificationResponse,notificationTypes,reminderNotificationTypes}=require('../shared/api/notifications.ts'),{notificationText,notificationTarget,appendNotifications}=require('../shared/notifications/presentation.ts'),{isAllowedApiRoute,isAllowedApiQuery}=require('../shared/api/relay.ts');
+
+for(const type of notificationTypes)test('closed '+type+' projection/copy/target',()=>{
+ const r=notification(type);
+ assert.deepEqual(notificationResponse({...r,amount_minor:100,reason:'private',payload:{},actor:r.actor?{...r.actor,phone:'private'}:null}),r);
+ if(reminderNotificationTypes.includes(type)){
+  assert.match(notificationText(r),/^Payment /);
+ }else{
+  assert.ok(notificationText(r).startsWith('Morgan '));
+ }
+ assert.ok(!/100|private/.test(notificationText(r)));
+ assert.deepEqual(notificationTarget(r),type.startsWith('REPAYMENT_')?{page:'repayment',id:A,parent:ID}:{page:'commitment',id:ID,extension:type.startsWith('EXTENSION_')});
+});
+
 for(const field of Object.keys(notification()))test('required '+field,()=>{const r=notification();delete r[field];assert.throws(()=>notificationResponse(r));});
 for(const patch of [{type:'UNKNOWN'},{actor:{id:'bad',display_name:'Name'}},{created_at:'bad'},{repayment_id:A},{read_at:'2025-01-01T00:00:00Z'}])test('invalid notification '+JSON.stringify(patch),()=>assert.throws(()=>notificationResponse({...notification(),...patch})));
+
+for(const type of reminderNotificationTypes){
+ test(type+' requires null actor and no child resource ids',()=>{
+  assert.throws(()=>notificationResponse({...notification(type),actor:{id:B,display_name:'Morgan'}}));
+  assert.throws(()=>notificationResponse({...notification(type),repayment_id:A}));
+  assert.throws(()=>notificationResponse({...notification(type),extension_request_id:E}));
+ });
+}
+for(const type of notificationTypes.filter(type=>!reminderNotificationTypes.includes(type)))test(type+' requires human actor',()=>{
+ assert.throws(()=>notificationResponse({...notification(type),actor:null}));
+});
+
 test('exact list and read wires no key cookies',async()=>{
  let calls=0;const api=createNotificationsApi({baseUrl:'https://fides.example/api/v1',fetcher:async(url,init)=>{calls++;assert.equal(init.headers.get('Idempotency-Key'),null);assert.equal(init.credentials,'omit');if(init.method==='GET'){assert.equal(url,'https://fides.example/api/v1/notifications?limit=50&cursor=opaque%2F..%2F%2B%3D');assert.equal(init.body,undefined);return Response.json({items:[notification()],next_cursor:null});}assert.equal(url,'https://fides.example/api/v1/notifications/'+E+'/read');assert.equal(init.body,'{}');return Response.json({...notification(),read_at:'2026-10-02T00:00:00Z'});}});
  await api.listNotifications({cursor:'opaque/../+='});assert.ok((await api.markRead(E)).read_at);assert.equal(calls,2);
@@ -12,6 +36,7 @@ for(const query of ['offset=1','user_id='+A,'read_at=null','limit=0','limit=101'
 for(const query of ['','limit=50','limit=100&cursor=opaque'])test('relay query accepted '+query,()=>assert.equal(isAllowedApiQuery(['notifications'],new URLSearchParams(query)),true));
 for(const route of ['notifications/read-all','notifications/preferences','notifications/push','notifications/'+E+'/unread','notifications/'+E])for(const method of ['GET','POST','DELETE','PATCH'])test('excluded '+method+route,()=>assert.equal(isAllowedApiRoute(method,route.split('/')),false));
 test('append dedupes id preserves server ordering',()=>{const first=notification('EXTENSION_ACCEPTED',E),second=notification('COMMITMENT_CONFIRMED',A);assert.deepEqual(appendNotifications([first],[first,second]),[first,second]);});
+
 for(const platform of ['web','mobile']){
  test(platform+' read only on activation, failure remains unread then authoritative read',async()=>{
  let reads=0,fail=true;const env={state:{status:'authenticated',user:{id:A}},session:{bootstrap:async()=>{},snapshot:()=>env.state},notifications:{listNotifications:async()=>({items:[notification()],next_cursor:null}),markRead:async()=>{reads++;if(fail)throw new Error('network');return {...notification(),read_at:'2026-10-02T00:00:00Z'};}}};
