@@ -33,7 +33,10 @@
     "test:notifications": "node --test tests/notifications.test.cjs",
     "test:profile": "node --test tests/profile.test.cjs",
     "test:mvp:live": "node tests/mvp-live.cjs",
-    "preview:mvp": "node tests/mvp-preview.cjs"
+    "preview:mvp": "node tests/mvp-preview.cjs",
+    "test:notification-preferences": "node --test tests/notification-preferences.test.cjs",
+    "test:mutual-closure": "node --test tests/mutual-closure.test.cjs",
+    "test:due-summaries": "node --test tests/due-summaries.test.cjs"
   },
   "devDependencies": {
     "typescript": "~6.0.3"

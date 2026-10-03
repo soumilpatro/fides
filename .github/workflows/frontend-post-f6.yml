@@ -1,0 +1,39 @@
+name: Frontend post-F6 validation
+
+on:
+  push:
+    branches:
+      - feat/post-f6-follow-up
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:auth
+      - run: npm run test:connections
+      - run: npm run test:commitments
+      - run: npm run test:repayments
+      - run: npm run test:dashboard
+      - run: npm run test:extensions
+      - run: npm run test:notifications
+      - run: npm run test:profile
+      - run: npm run test:notification-preferences
+      - run: npm run test:mutual-closure
+      - run: npm run test:due-summaries
+      - run: npm run build:web
+      - run: npm run config --workspace=@fides/mobile

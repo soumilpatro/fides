@@ -54,7 +54,7 @@ export function AuthFlow({ intent }: { intent: AuthIntent }) {
       await session.establish(result);
     });
   }
-  if (state.status !== "anonymous") return <main className="auth-page"><LoadingState message="Resolving your session…" /></main>;
+  if (state.status !== "anonymous") return <main className="auth-page"><Brand /><LoadingState message="Resolving your session…" /></main>;
   return <main className="auth-page" id="main-content">
     <div className="auth-brand"><Link href="/"><Brand /></Link><span className="micro">A SHARED RECORD</span></div>
     <section className="auth-card">

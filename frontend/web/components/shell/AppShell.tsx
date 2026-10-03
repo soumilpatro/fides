@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Screen } from "../ui";
+import { Brand } from "../Brand";
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
@@ -8,8 +9,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <aside className="sidebar">
-        <Link className="wordmark" href="/" aria-label="Fides foundation home">
-          FIDES
+        <Link href="/" aria-label="Fides foundation home">
+          <Brand />
         </Link>
         <p className="micro">FRONTEND FOUNDATION</p>
         <nav aria-label="Foundation">

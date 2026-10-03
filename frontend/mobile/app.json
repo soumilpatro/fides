@@ -6,7 +6,25 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "plugins": [
-      ["expo-secure-store", { "configureAndroidBackup": true, "faceIDPermission": false }]
-    ]
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": false
+        }
+      ]
+    ],
+    "icon": "./assets/fides-app-icon-indigo-1024x1024.png",
+    "splash": {
+      "image": "./assets/fides-splash-portrait-1170x2532.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F7F6F3"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/fides-app-icon-indigo-1024x1024.png",
+        "backgroundColor": "#F7F6F3"
+      }
+    }
   }
 }

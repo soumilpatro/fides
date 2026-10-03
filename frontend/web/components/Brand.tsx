@@ -1,4 +1,7 @@
+import Image from "next/image";
+
 export function Brand() {
-  // Replace here only when the final production Record Loop asset is supplied.
-  return <span className="wordmark" aria-label="Fides">FIDES</span>;
+  return <span className="brand-lockup" aria-label="Fides">
+    <Image className="brand-lockup-image" src="/brand/fides-record-loop-horizontal-512x171.png" alt="" width={128} height={43} priority />
+  </span>;
 }

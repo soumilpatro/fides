@@ -10,9 +10,12 @@ import { createLedgerApi, type LedgerApi } from "@fides/shared/api/ledger";
 import { createExtensionsApi, type ExtensionsApi } from "@fides/shared/api/extensions";
 import { createNotificationsApi, type NotificationsApi } from "@fides/shared/api/notifications";
 import { createProfileApi, type ProfileApi } from "@fides/shared/api/profile";
+import { createNotificationPreferencesApi, type NotificationPreferencesApi } from "@fides/shared/api/notification-preferences";
+import { createDueSummariesApi, type DueSummariesApi } from "@fides/shared/api/due-summaries";
+import { createMutualClosureApi, type MutualClosureApi } from "@fides/shared/api/mutual-closure";
 import { MutationIntents } from "@fides/shared/commitments/intents";
 import { secureSessionStore } from "./session/session-store";
-export interface AuthContextValue { state: AuthState; session: AuthSession; api: AuthApi; connections: ConnectionsApi; commitments: CommitmentsApi; repayments: RepaymentsApi; dashboard: DashboardApi; ledger: LedgerApi; extensions: ExtensionsApi; notifications: NotificationsApi; profile: ProfileApi; intents: MutationIntents }
+export interface AuthContextValue { state: AuthState; session: AuthSession; api: AuthApi; connections: ConnectionsApi; commitments: CommitmentsApi; repayments: RepaymentsApi; dashboard: DashboardApi; ledger: LedgerApi; extensions: ExtensionsApi; notifications: NotificationsApi; profile: ProfileApi; notificationPreferences: NotificationPreferencesApi; dueSummaries: DueSummariesApi; mutualClosure: MutualClosureApi; intents: MutationIntents }
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [services] = useState(() => {
@@ -20,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const api = createAuthApi({ baseUrl, accessToken: () => session.accessToken() });
     const session = new AuthSession(secureSessionStore(), api);
     const connections = createConnectionsApi({ baseUrl, accessToken: session.accessToken });
-    return { session, api, connections, commitments: createCommitmentsApi({ baseUrl, accessToken: session.accessToken }), repayments: createRepaymentsApi({ baseUrl, accessToken: session.accessToken }), dashboard: createDashboardApi({ baseUrl, accessToken: session.accessToken }), ledger: createLedgerApi({ baseUrl, accessToken: session.accessToken }), extensions: createExtensionsApi({baseUrl,accessToken:session.accessToken}), notifications:createNotificationsApi({baseUrl,accessToken:session.accessToken}), profile:createProfileApi({baseUrl,accessToken:session.accessToken}), intents: new MutationIntents() };
+    return { session, api, connections, commitments: createCommitmentsApi({ baseUrl, accessToken: session.accessToken }), repayments: createRepaymentsApi({ baseUrl, accessToken: session.accessToken }), dashboard: createDashboardApi({ baseUrl, accessToken: session.accessToken }), ledger: createLedgerApi({ baseUrl, accessToken: session.accessToken }), extensions: createExtensionsApi({baseUrl,accessToken:session.accessToken}), notifications:createNotificationsApi({baseUrl,accessToken:session.accessToken}), profile:createProfileApi({baseUrl,accessToken:session.accessToken}), notificationPreferences:createNotificationPreferencesApi({baseUrl,accessToken:session.accessToken}), dueSummaries:createDueSummariesApi({baseUrl,accessToken:session.accessToken}), mutualClosure:createMutualClosureApi({baseUrl,accessToken:session.accessToken}), intents: new MutationIntents() };
   });
   const state = useSyncExternalStore(services.session.subscribe, services.session.snapshot, services.session.snapshot);
   useEffect(() => { void services.session.bootstrap(); }, [services]);

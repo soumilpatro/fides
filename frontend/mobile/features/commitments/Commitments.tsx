@@ -11,6 +11,8 @@ import { Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Sc
 import { useCommitments } from "./useCommitments";
 import { ExtensionsSection, NewExtension } from "../extensions/Extensions";
 import { Summary, History } from "../dashboard/Dashboard";
+import { DueSummaryOverview } from "../dashboard/DueSummarySections";
+import { MutualClosureSection } from "../mutual-closure/MutualClosure";
 import { RepaymentsSection, ReportRepayment, RepaymentDetail } from "../repayments/Repayments";
 import { useAuth } from "../auth/useAuth";
 type Destination = {page:"extension";id:string} | { page: "list" } | { page: "new"; connection?: string } | { page: "detail"; id: string } | {page:"report";id:string} | {page:"repayment";id:string;parent:string};
@@ -29,7 +31,7 @@ function Feedback({ error, busy }: { error: string | null; busy: boolean }) {
 }
 function CommitmentsList({ onNew, onDetail }: { onNew: () => void; onDetail: (id:string) => void }) {
   const data = useCommitments();
-  return <Screen><Title>Home</Title><Summary/><Card title="Commitments"><Button title="Create commitment" onPress={onNew} /></Card>
+  return <Screen><Title>Home</Title><Summary/><DueSummaryOverview onOpen={onDetail}/><Card title="Commitments"><Button title="Create commitment" onPress={onNew} /></Card>
     <Button title="Refresh commitments" variant="quiet" disabled={data.busy} onPress={() => void data.refresh()} /><Feedback error={data.error} busy={data.busy} />
     {data.data?.rows.length === 0 && <EmptyState title="No commitments yet" message="Create a shared record with someone you're connected to." />}
     {data.data?.rows.map(row => <Card key={row.id}><PersonRow name={counterparty(row,data.userId)!.display_name} role={"You are the " + commitmentRole(row,data.userId)!.toLowerCase()} />
@@ -113,7 +115,7 @@ function CommitmentDetail({ id, onBack, onReport, onRepayment, onRequest }: { id
         <Body>Installment {item.sequence_no} · {item.due_date}</Body><StatusChip label={item.status.replaceAll("_"," ")} />
         <Body>Principal: {formatMoney(item.principal_amount_minor,item.currency)}</Body><Body>Interest: {formatMoney(item.interest_amount_minor,item.currency)}</Body><Body>Total due: {formatMoney(item.total_due_minor,item.currency)}</Body>
       </View>)}</Card>}
-      <ExtensionsSection id={row.id} onRequest={onRequest} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><History key={row.id+":"+revision} id={row.id} onRepayment={onRepayment}/><RepaymentsSection id={row.id} onReport={onReport} onDetail={onRepayment}/>
+      <ExtensionsSection id={row.id} onRequest={onRequest} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><RepaymentsSection id={row.id} onReport={onReport} onDetail={onRepayment}/><MutualClosureSection id={row.id} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><History key={row.id+":"+revision} id={row.id} onRepayment={onRepayment}/>
       {proposalActions(row,data.userId).map(action => {const pending = data.pending(action); return <Button key={action}
         title={pending ? "Retry same " + action : {confirm:"Confirm commitment",reject:"Reject proposal",cancel:"Cancel proposal"}[action]}
         disabled={data.busy || data.actionBlocked(action) || !data.data?.terms || !!pending?.blocked || !!pending?.needsReconcile} onPress={() => setConfirmation(action)} />;})}

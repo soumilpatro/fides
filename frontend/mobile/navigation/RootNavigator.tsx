@@ -17,7 +17,7 @@ import { Connections } from "../features/connections/Connections";
 import { FoundationScreen } from "../app/FoundationScreen";
 export function RootNavigator() {
   const { state } = useAuth();
-  if (state.status === "loading") return <SafeAreaView style={styles.safe}><Screen><LoadingState message="Resolving your session…" /></Screen></SafeAreaView>;
+  if (state.status === "loading") return <SafeAreaView style={styles.safe}><Screen><Brand /><LoadingState message="Resolving your session…" /></Screen></SafeAreaView>;
   return <SafeAreaView style={styles.safe}>{state.status === "authenticated" ? <AuthenticatedShell /> : <Anonymous />}</SafeAreaView>;
 }
 function Anonymous() {
