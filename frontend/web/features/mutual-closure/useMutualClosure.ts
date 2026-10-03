@@ -27,8 +27,13 @@ export function useMutualClosure(id:string){
   const reconcile=useCallback((next:Snapshot)=>{
     const createKey=scope("create"),pendingCreate=intents.get(createKey);
     if(pendingCreate){
-      if(next.rows.some(row=>row.status==="REQUESTED"))pendingCreate.blocked=true;
-      intents.reconciled(createKey);
+      const body=JSON.parse(pendingCreate.payload) as MutualClosureRequestBody;
+      const confirmed=next.rows.some(row=>row.status==="REQUESTED"&&row.requested_by.id===user&&row.note===body.note);
+      if(confirmed)intents.succeeded(createKey);
+      else{
+        if(next.rows.some(row=>row.status==="REQUESTED"))pendingCreate.blocked=true;
+        intents.reconciled(createKey);
+      }
     }
     for(const row of next.rows)for(const action of ["accept","reject","cancel"] as const){
       const key=scope(action,row.id);if(!intents.get(key))continue;
