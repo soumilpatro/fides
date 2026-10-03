@@ -1,3 +1,5 @@
+const fs=require('node:fs'),ts=require('typescript');
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,f);
 const test=require('node:test'),assert=require('node:assert/strict');
 const {createMutualClosureApi,mutualClosureResponse,closureBody}=require('../shared/api/mutual-closure.ts');
 const {canRequestMutualClosure,mutualClosureActions,hasPendingRepayment,verifiedRepayments,closureStatusLabel}=require('../shared/mutual-closure/model.ts');
