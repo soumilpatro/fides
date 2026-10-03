@@ -19,7 +19,7 @@ async function relay(request: Request, context: { params: Promise<{ path: string
     for (const name of ["Authorization", "Content-Type"]) {
       const value = request.headers.get(name); if (value) headers.set(name, value);
     }
-    if (request.method === "POST" && (path[0] === "commitments" || path[0] === "repayments" || path[0] === "extension-requests")) {
+    if (request.method === "POST" && (path[0] === "commitments" || path[0] === "repayments" || path[0] === "extension-requests" || path[0] === "closure-requests")) {
       const key = request.headers.get("Idempotency-Key");
       if (!key || !/^[A-Za-z0-9._:-]{1,128}$/.test(key)) return failure(400, "MALFORMED_REQUEST", "Invalid request.");
       headers.set("Idempotency-Key", key);
