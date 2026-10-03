@@ -16,7 +16,7 @@ function Confirmation({row,action,onCancel,onConfirm}:{row:MutualClosure;action:
   :action==="reject"?"The commitment will remain open. No balance will be waived.":"The pending request will be cancelled. The commitment will remain open.";
  return <dialog tabIndex={-1} onKeyDown={trapConfirmationFocus} className="connection-confirm f6-dialog" ref={dialog} aria-labelledby="closure-confirm-title" aria-describedby="closure-confirm-body" onCancel={onCancel}>
   <h2 id="closure-confirm-title">{title}</h2><p id="closure-confirm-body">{body}</p>
-  <div className="button-row"><Button variant="quiet" autoFocus onClick={onCancel}>Go back</Button><Button variant={action==="cancel"?"secondary":"primary"} onClick={onConfirm}>{action==="accept"?"Accept mutual closure":action==="reject"?"Reject request":"Cancel request"}</Button></div>
+  <div className="button-row"><Button variant="quiet" autoFocus onClick={onCancel}>Go back</Button><Button variant={action==="accept"?"primary":"secondary"} onClick={onConfirm}>{action==="accept"?"Accept mutual closure":action==="reject"?"Reject request":"Cancel request"}</Button></div>
  </dialog>;
 }
 
@@ -55,7 +55,7 @@ export function MutualClosureSection({id,onChanged}:{id:string;onChanged:()=>voi
     {row.decided_by&&<p>{row.decided_by.display_name} · <time dateTime={row.decided_at!}>{row.decided_at}</time></p>}
     {row.status==="ACCEPTED"&&<p><strong>Closed by mutual agreement</strong></p>}
     {row.status==="REQUESTED"&&row.counterparty.id===data.user&&pendingVerification&&<p role="status">A repayment is pending verification. Resolve it before accepting mutual closure.</p>}
-    <div className="button-row">{mutualClosureActions(row,data.user).map(action=>{const pending=data.pending(action,row.id),blockedByVerification=action==="accept"&&pendingVerification;return <Button key={action} variant={action==="cancel"?"secondary":"primary"} disabled={data.busy||blockedByVerification||!!pending?.blocked||!!pending?.needsReconcile} onClick={()=>setConfirmation({row,action})}>{pending?"Retry same "+action:action==="accept"?"Accept":action==="reject"?"Reject":"Cancel request"}</Button>;})}</div>
+    <div className="button-row">{mutualClosureActions(row,data.user).map(action=>{const pending=data.pending(action,row.id),blockedByVerification=action==="accept"&&pendingVerification;return <Button key={action} variant={action==="accept"?"primary":"secondary"} disabled={data.busy||blockedByVerification||!!pending?.blocked||!!pending?.needsReconcile} onClick={()=>setConfirmation({row,action})}>{pending?"Retry same "+action:action==="accept"?"Accept":action==="reject"?"Reject":"Cancel request"}</Button>;})}</div>
    </Card>)}
   </>}
   {confirmation&&<Confirmation {...confirmation} onCancel={()=>setConfirmation(null)} onConfirm={()=>{const {row,action}=confirmation;setConfirmation(null);void data.decide(row,action).then(result=>{if(result)onChanged();});}}/>}
