@@ -6857,3 +6857,45 @@ No implementation begins before this docs checkpoint is committed.
 ## B11-R and Notification Preferences stop conditions
 
 Stop before proceeding if implementation requires a destructive migration; a change to financial semantics or commitment/repayment state machines; repayment-to-installment allocation logic; new broker/queue infrastructure; Redis, Celery, Kafka, or RabbitMQ; a new notification channel/provider; push, email, or SMS; auth redesign; a new dependency unless strictly required and approved; API behavior outside these contracts; frontend implementation; or automatic `DEFAULTED` behavior.
+
+## Notification Reminder Response Compatibility D0 — APPROVED
+
+### A. New notification types
+
+Add support for `UPCOMING_DUE`, `DUE_TODAY`, and `OVERDUE`. Existing notification types remain unchanged.
+
+### B. System reminder actor
+
+Scheduled reminders are system-generated. For the three reminder types only, `actor = null`. Do not fabricate a fake user, “Fides”, “System”, or a synthetic human actor.
+
+### C. Existing workflow actors
+
+All existing human/workflow notification types preserve their current non-null actor projection exactly as today. Do not weaken existing workflow response guarantees.
+
+### D. Resource IDs
+
+For reminder notifications, `commitment_id` is the affected commitment, while `repayment_id` and `extension_request_id` are null. Any other unrelated resource IDs remain null unless genuinely applicable.
+
+### E. Response compatibility
+
+Keep all other existing notification response fields and semantics unchanged. Do not redesign pagination, read state, ordering, cursor behavior, status semantics, or ownership rules.
+
+### F. Reminder payload
+
+Reminder storage/projection may use minimal server-controlled metadata such as `terms_version_id`, `installment_id` or null, and `scheduled_local_date`. Do not include phone numbers, free-form private notes, repayment evidence, authentication tokens, secrets, fabricated installment outstanding amounts, or repayment-to-installment allocation claims.
+
+### G. Historical readability
+
+Reminder creation eligibility is evaluated using current authoritative state. Once a reminder `NotificationEvent` is created, later repayments, extensions, term changes, and commitment progression must not make that historical reminder unreadable. Historical projection must remain stable and safe.
+
+### H. Frontend coordination
+
+Frontend implementation is separate. The frontend track must later accept `UPCOMING_DUE`, `DUE_TODAY`, and `OVERDUE`; allow actor null for these types only; avoid dereferencing `actor.display_name` for system reminders; preserve existing human notification rendering; navigate reminder notifications to the commitment; and not generate reminder eligibility client-side. Do not modify frontend in this checkpoint or backend implementation task.
+
+### I. Overdue cadence clarification
+
+For overdue reminders, `E = due_date + grace_period_days + 1` calendar day. For current borrower-local date `T`, `S = E + 7 × floor((T - E).days / 7)` is the one currently applicable overdue cadence occurrence. Do not enumerate every missed historical overdue reminder; create at most the currently applicable occurrence. Overlapping scheduler runs rely on database dedupe. Upcoming/due reminders never backfill after their applicable local date.
+
+### J. Core invariant
+
+System reminder notifications are distinguishable from human workflow notifications without fabricating an actor, while preserving all existing workflow response behavior and keeping historical reminder rows safely readable.
