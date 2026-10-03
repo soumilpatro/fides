@@ -9,8 +9,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <aside className="sidebar">
-        <Link className="wordmark" href="/" aria-label="Fides foundation home">
-          FIDES
+        <Link href="/" aria-label="Fides foundation home">
+          <Brand />
         </Link>
         <p className="micro">FRONTEND FOUNDATION</p>
         <nav aria-label="Foundation">
