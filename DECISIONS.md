@@ -7071,3 +7071,75 @@ classification. Upcoming covers borrower-local today through today plus 7 days,
 including today; Overdue requires borrower-local today to be at least due date
 plus grace plus one day and positive verified outstanding. Installment rows are
 schedule context only and never imply allocation.
+
+## Upcoming / Overdue API T0 — Implementation Clarifications APPROVED
+
+Overdue results are ordered by occurrence `due_date` ascending, then
+`commitment_id` ascending, then occurrence identifier ascending. The earliest
+overdue occurrence appears first. Non-installment occurrences use a stable
+non-null internal occurrence identifier for ordering and cursor purposes; it is
+not exposed unless already part of the approved response.
+
+Use the existing Fides opaque cursor convention: unsigned URL-safe Base64 JSON.
+The logical payload is `[version, principal_user_id, endpoint_kind, due_date,
+commitment_id, installment_id_or_null]`. Validation enforces the exact version
+and array shape, bounded length, canonical UUIDs and date, authenticated
+principal scope, endpoint kind exactly `UPCOMING` or `OVERDUE`, and a valid
+nullable installment ID. Malformed, non-canonical, wrong-principal, and
+wrong-endpoint cursors use the existing `422 VALIDATION_ERROR`. MVP does not
+require cryptographic signing, a signing secret, a dependency, or a general
+pagination framework; syntactically valid user-edited cursors are not promised
+cryptographic tamper detection.
+
+Pagination defaults to 50 and allows at most 100 results. There is no offset
+pagination. Each request scans at most 500 globally ordered candidate
+occurrences. It returns up to the requested number of eligible items. If the
+budget yields fewer items, including an empty page, the page may be short. If
+candidate space remains, `next_cursor` represents the last scanned candidate,
+not merely the last returned item, so continuation advances through the
+ordered candidate stream without unbounded rescanning.
+
+Pagination is live and provides no cross-page snapshot guarantee. Membership
+and ordering may change between requests because of repayments, pending or
+disputed resolution, accepted extensions, Mutual Closure, lifecycle changes, or
+borrower-local date transitions. Each request still uses one coherent
+evaluation instant and the authenticated-User read serialization protocol.
+
+Implementation must hold the authenticated User lock, capture one evaluation
+instant, preserve global due-date ordering, batch current terms, repayment
+aggregates and integrity checks, current installments, and participant
+projections, and avoid N+1 queries, unlimited history, and financial mutation
+locks. No migration or index is approved unless an actual query-plan blocker is
+demonstrated and implementation stops for approval.
+
+Affected principal/page corruption fails safely with the existing sanitized
+`SERVICE_UNAVAILABLE` behavior; corrupt financial state is not silently
+skipped. Bounded candidate/lookahead validation covers missing or future-only
+terms, invalid timezones, malformed schedule metadata, incomplete/excess or
+misassociated current installments, inconsistent installment dates/allocation
+persistence, invalid repayment currency or reporter, impossible participants,
+missing counterparty, accounting inconsistency, and date overflow. Unrelated
+users' corruption must not affect the authenticated principal.
+
+Only persisted `CommitmentInstallment` IDs from the current authoritative
+TermsVersion may be used. Installment status is not payment allocation truth;
+occurrences are informational and have no installment-level unpaid amount.
+Historical TermsVersion installments never appear. Current-version installment
+rows are invalid stored state for `NONE` and `SINGLE` schedules.
+
+Both endpoints are strictly read-only: no commitment status or DEFAULTED change,
+ledger, audit, notification, reminder, repayment-allocation, terms, or
+installment writes, and no financial mutation locks.
+
+Final implementation flow: docs correction checkpoint; bounded schemas/cursor;
+dedicated read-only occurrence service; globally ordered bounded candidate
+query; batched authoritative projection/accounting; two summary routes; focused
+eligibility, installment, pagination, and integrity tests; concurrency/security
+tests; relevant regression; full backend regression; focused self-review;
+checkpoint; merge only after approval.
+
+Implementation stops for approval if it requires an unjustified
+migration/index, dependency, cryptographic cursor infrastructure, financial
+formula or repayment-allocation change, reminder behavior or B13 lock-order
+change, Commitment.status mutation, automatic DEFAULTED, existing summary
+response change, new public error, frontend change, or unbounded scanning.
