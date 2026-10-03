@@ -6,6 +6,7 @@ import { validDate } from "../commitments/form";
 import { boundedFetch } from "./dashboard";
 type RepaymentFacts = {repayment_id:string;amount_minor:number;currency:Currency};
 type ExtensionFacts = {extension_request_id:string;base_terms_version_id:string;requested_by_user_id:string;previous_due_date:string;requested_due_date:string};
+type ClosureFacts = {closure_request_id:string;currency:Currency;outstanding_snapshot_minor:number;waived_amount_minor:number};
 type DetailMap = {
  COMMITMENT_PROPOSED:{status:"PENDING_CONFIRMATION";terms_version_id:string};
  COMMITMENT_CONFIRMED:{status:"ACTIVE"}; COMMITMENT_REJECTED:{status:"REJECTED"}; COMMITMENT_CANCELLED:{status:"CANCELLED"};
@@ -15,6 +16,10 @@ type DetailMap = {
  EXTENSION_REQUESTED:ExtensionFacts & {status:"REQUESTED"};
  EXTENSION_ACCEPTED:ExtensionFacts & {status:"ACCEPTED";terms_version_id:string};
  EXTENSION_REJECTED:ExtensionFacts & {status:"REJECTED"};
+ MUTUAL_CLOSURE_REQUESTED:ClosureFacts & {status:"REQUESTED"};
+ MUTUAL_CLOSURE_ACCEPTED:ClosureFacts & {status:"ACCEPTED";resulting_commitment_status:"CLOSED"};
+ MUTUAL_CLOSURE_REJECTED:ClosureFacts & {status:"REJECTED"};
+ MUTUAL_CLOSURE_CANCELLED:ClosureFacts & {status:"CANCELLED"};
 };
 export type TimelineEvent = {[K in keyof DetailMap]:{id:string;commitment_id:string;actor:Person;occurred_at:string;event_type:K;details:DetailMap[K]}}[keyof DetailMap];
 export interface LedgerResponse {items:TimelineEvent[];next_cursor:string|null}
@@ -28,7 +33,7 @@ function eventResponse(v:unknown,parent:string):TimelineEvent {
  const stamp=string(r.occurred_at);if(!/^\d{4}-\d{2}-\d{2}T.*(?:Z|\+00:00)$/.test(stamp)||!Number.isFinite(Date.parse(stamp)))fail();
  if(uuid(r.commitment_id)!==parent)fail();
  let details:Record<string,unknown>;
- const statuses:Record<string,string>={COMMITMENT_PROPOSED:"PENDING_CONFIRMATION",COMMITMENT_CONFIRMED:"ACTIVE",COMMITMENT_REJECTED:"REJECTED",COMMITMENT_CANCELLED:"CANCELLED",REPAYMENT_REPORTED:"PENDING_VERIFICATION",REPAYMENT_VERIFIED:"VERIFIED",REPAYMENT_DISPUTED:"DISPUTED",EXTENSION_REQUESTED:"REQUESTED",EXTENSION_ACCEPTED:"ACCEPTED",EXTENSION_REJECTED:"REJECTED"};
+ const statuses:Record<string,string>={COMMITMENT_PROPOSED:"PENDING_CONFIRMATION",COMMITMENT_CONFIRMED:"ACTIVE",COMMITMENT_REJECTED:"REJECTED",COMMITMENT_CANCELLED:"CANCELLED",REPAYMENT_REPORTED:"PENDING_VERIFICATION",REPAYMENT_VERIFIED:"VERIFIED",REPAYMENT_DISPUTED:"DISPUTED",EXTENSION_REQUESTED:"REQUESTED",EXTENSION_ACCEPTED:"ACCEPTED",EXTENSION_REJECTED:"REJECTED",MUTUAL_CLOSURE_REQUESTED:"REQUESTED",MUTUAL_CLOSURE_ACCEPTED:"ACCEPTED",MUTUAL_CLOSURE_REJECTED:"REJECTED",MUTUAL_CLOSURE_CANCELLED:"CANCELLED"};
  if(!Object.hasOwn(statuses,type)||d.status!==statuses[type])fail();
  if(type.startsWith("COMMITMENT_"))details={status:d.status,...(type==="COMMITMENT_PROPOSED"?{terms_version_id:uuid(d.terms_version_id)}:{})};
  else if(type.startsWith("REPAYMENT_")){
@@ -41,10 +46,17 @@ function eventResponse(v:unknown,parent:string):TimelineEvent {
      details.resulting_commitment_status=d.resulting_commitment_status;
      details.resulting_verified_outstanding_minor=money(d.resulting_verified_outstanding_minor);
    }
- }else{
+ }else if(type.startsWith("EXTENSION_")){
    if(!validDate(string(d.previous_due_date))||!validDate(string(d.requested_due_date)))fail();
    details={status:d.status,extension_request_id:uuid(d.extension_request_id),base_terms_version_id:uuid(d.base_terms_version_id),requested_by_user_id:uuid(d.requested_by_user_id),previous_due_date:d.previous_due_date,requested_due_date:d.requested_due_date};
    if(type==="EXTENSION_ACCEPTED")details.terms_version_id=uuid(d.terms_version_id);
+ }else{
+   if(!["INR","USD","GBP"].includes(string(d.currency)))fail();
+   details={status:d.status,closure_request_id:uuid(d.closure_request_id),currency:d.currency,outstanding_snapshot_minor:money(d.outstanding_snapshot_minor,true),waived_amount_minor:money(d.waived_amount_minor,true)};
+   if(type==="MUTUAL_CLOSURE_ACCEPTED"){
+     if(d.resulting_commitment_status!=="CLOSED")fail();
+     details.resulting_commitment_status="CLOSED";
+   }
  }
  return {id:uuid(r.id),commitment_id:parent,actor:{id:uuid(a.id),display_name:string(a.display_name)},occurred_at:stamp,event_type:type,details} as TimelineEvent;
 }
