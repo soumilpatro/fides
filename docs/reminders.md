@@ -25,8 +25,13 @@ python -m app.jobs.reminders
 python -m app.jobs.notification_cleanup
 ```
 
-Each command runs once and exits. B15 must arrange approximately hourly reminder
-invocation and separate daily cleanup, process exit monitoring, and least privilege.
+Each command runs once and exits. B15-D0 freezes hourly reminder invocation and
+separate daily notification cleanup as Railway scheduled services. A UTC scheduler
+is acceptable; reminder eligibility still uses contractual borrower-local dates.
+See [the B15 runbook](b15-deployment.md) for release gates and process credentials.
+Deploy one configured schedule per job/environment, monitor non-zero exits, and
+verify least privilege. Overlap safety comes from existing dedupe uniqueness and
+cleanup SKIP LOCKED behavior, not a new singleton lock or background worker.
 There is no web-worker background loop, broker, new provider, or dependency.
 Exit 0 means completion/no-op; startup, database, or corrupt-candidate partial
 failure yields a non-zero reminder exit. Logs contain bounded categories/counts,
@@ -85,6 +90,12 @@ an expired notification returns the existing generic unavailable response.
 Production cleanup should use a separately privileged maintenance DATABASE_URL
 in its own process. No production credentials or role redesign is supplied here;
 B15 must verify that the runtime role does not acquire broad delete privileges.
+
+Both commands load the existing shared Settings. With APP_ENV=staging/production,
+valid Twilio and HMAC configuration is required even though the jobs do not call
+Twilio. Do not bypass validation with a false local/test environment, placeholder
+credentials, or a fake provider. Restrict secret access; a job-specific settings
+change requires separate approval. This docs checkpoint creates no credentials.
 
 Frontend coordination is a separate release prerequisite before enabling reminders:
 accept the three new types, allow null actor only for them, use system reminder

@@ -10,14 +10,18 @@ un-automated concern from ordinary application schema migrations
 ## Why this is separate from Alembic migrations
 
 Alembic migrations in `backend/migrations/versions/` are owned by the
-application and run automatically as part of deploys. Database roles and
+application. No automatic deployment hook currently exists, and application
+startup does not run migrations. B15-D0 requires a separate, explicitly invoked
+migration step using a migration credential; a future hook must be implemented
+and verified before claiming automatic deployment execution. Database roles and
 their grants are an infrastructure/security concern that should be
 provisioned and reviewed by whoever manages the database environment
 (which may be a different process, person, or tool than "run migrations
 on deploy"), and should not be silently alterable by an application-level
 migration. This separation is deliberate, not an oversight — see AI
 Development & Backend Build Specification B14 (Security hardening) for
-where role provisioning tooling itself, if any, should be built.
+where role provisioning tooling itself, if any, should be built. B15 now owns
+deployment provisioning and verification; see [the B15 runbook](b15-deployment.md).
 
 ## Required roles
 
@@ -36,9 +40,10 @@ where role provisioning tooling itself, if any, should be built.
 - Must have `SELECT`, `INSERT`, `UPDATE` on ordinary domain tables
   (`users`, `connections`, `commitments`, `commitment_terms_versions`,
   `commitment_installments`, `repayments`, `repayment_verifications`,
-  `extension_requests`, `idempotency_keys`, `notification_events`).
+  `extension_requests`, `idempotency_keys`, `notification_events`,
+  `notification_preferences`).
 - Must have `SELECT`, `INSERT` **only** — explicitly **no `UPDATE` or
-  `DELETE`** — on the two append-only tables:
+  `DELETE` or `TRUNCATE`** — on the two append-only tables:
   - `ledger_events`
   - `audit_logs`
 
@@ -48,6 +53,9 @@ where role provisioning tooling itself, if any, should be built.
   and ledger events are not hard-deleted").
 - Must **not** have superuser, `CREATEDB`, `CREATEROLE`, or
   `BYPASSRLS` privileges.
+- Must not own application objects or inherit an owner/migration role that
+  bypasses these restrictions. Verify effective grants, schema CREATE denial,
+  required schema/type usage, and actual application access under this credential.
 - Must **not** be usable to connect to any database other than the one
   it is scoped to (the application runtime role for `fides_dev` should
   not also have access to `fides_test`, and vice versa, keeping the two
@@ -110,7 +118,30 @@ notification permissions, idempotency permissions, and commitment update
 permissions remain unchanged. Grant provisioning stays separate from Alembic;
 this document performs no role or credential operations.
 
-## Local development note
+## B15 scheduled-service roles
+
+Staging and production use distinct migration, API, reminder, and notification
+cleanup credentials. Each process receives only its own `DATABASE_URL`; role
+provisioning remains separate from migrations. Migration head `014` follows `013`,
+and migration `001` requires `pgcrypto` availability/creation permissions.
+
+The reminder role reads commitments, current terms/installments, repayments,
+users, preferences, and notification state and inserts notification events.
+It has no financial UPDATE/DELETE, ledger/audit writes, DDL, or ownership rights.
+
+The notification cleanup role is limited to reading/deleting notification events
+and the minimum row-locking privilege needed by SELECT FOR UPDATE SKIP LOCKED
+(verify a column-level UPDATE grant rather than granting broad UPDATE). It must
+not delete preferences, users, auth identities, financial records, ledger, or audit.
+This is distinct from the separately documented auth-maintenance role/function;
+there is no executable auth-cleanup job command in this repository.
+
+Every non-migration service role must lack superuser, CREATEDB, CREATEROLE,
+BYPASSRLS, DDL, and inherited object ownership. Prove ledger/audit UPDATE, DELETE,
+and TRUNCATE denial under actual deployed service credentials. No grants are
+executed by this document.
+
+## Local development privileges
 
 The Docker Compose setup in `docker-compose.yml` (B1) uses a single,
 broadly-privileged `fides` role for local development convenience only,
