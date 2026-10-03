@@ -37,6 +37,10 @@ const inter = localFont({
 export const metadata: Metadata = {
   title: "Fides",
   description: "One shared record. A little more certainty.",
+  icons: {
+    icon: "/brand/record-loop-favicon.svg",
+    shortcut: "/brand/record-loop-favicon.svg",
+  },
 };
 const variables = {
   "--canvas": colors.canvas,
