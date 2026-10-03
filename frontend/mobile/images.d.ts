@@ -1,0 +1,1 @@
+declare module "*.png" {\n  const source: number;\n  export default source;\n}\n
