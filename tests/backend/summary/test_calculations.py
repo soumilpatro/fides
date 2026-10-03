@@ -2,12 +2,13 @@ from datetime import timedelta
 from uuid import UUID
 
 import pytest
-from sqlalchemy import select
-
 from app.models.commitment import Commitment
 from app.models.commitment_terms_version import CommitmentTermsVersion
 from app.models.enums import CommitmentStatus
+from sqlalchemy import select
+
 from repayments.conftest import seed
+
 from .conftest import bucket, read, unavailable
 
 
@@ -77,7 +78,7 @@ def test_state_matrix(b7, status):
         db.get(Commitment, UUID(b7.identifier)).status = status
     if status == CommitmentStatus.FULLY_REPAID:
         seed(b7, 10000, "VERIFIED")
-    if status.value in ("CLOSED", "DRAFT", "CONFIRMED", "DISPUTED", "DEFAULTED"):
+    if status.value in ("DRAFT", "CONFIRMED", "DISPUTED", "DEFAULTED"):
         unavailable(read(b7))
     else:
         expected = 10000 if status.value in ("ACTIVE", "PARTIALLY_REPAID") else 0

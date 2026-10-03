@@ -100,6 +100,16 @@ lock. Future financial writers introducing blocking commitments must lock the
 affected Users in stable UUID order and recheck ACTIVE eligibility before their
 write, as required by B2-D2. Direct writes bypassing that protocol are not safe.
 
+## Mutual closure runtime permissions
+
+Migration 014 adds `mutual_closure_requests` and its dedicated status enum.
+The application runtime role requires SELECT, INSERT and UPDATE on the new
+table, with no DELETE or DDL privileges. Closure rows and their original waiver
+snapshots remain durable. Existing SELECT/INSERT-only ledger and audit grants,
+notification permissions, idempotency permissions, and commitment update
+permissions remain unchanged. Grant provisioning stays separate from Alembic;
+this document performs no role or credential operations.
+
 ## Local development note
 
 The Docker Compose setup in `docker-compose.yml` (B1) uses a single,

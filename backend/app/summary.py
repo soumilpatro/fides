@@ -25,6 +25,7 @@ INCLUDED = {
     CommitmentStatus.FULLY_REPAID,
 }
 EXCLUDED = {
+    CommitmentStatus.CLOSED,
     CommitmentStatus.PENDING_CONFIRMATION,
     CommitmentStatus.REJECTED,
     CommitmentStatus.CANCELLED,

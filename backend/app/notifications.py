@@ -49,6 +49,8 @@ def _source(event):
     if event.event_type.startswith("REPAYMENT_"):
         _require(event.repayment_id is not None)
         return "Repayment", event.repayment_id
+    if event.event_type.startswith("MUTUAL_CLOSURE_"):
+        return "MutualClosureRequest", UUID(event.event_payload["closure_request_id"])
     return "ExtensionRequest", UUID(event.event_payload["extension_request_id"])
 
 

@@ -286,6 +286,7 @@ def test_only_approved_b2_routes_are_registered():
                 "/api/v1/commitments",
                 "/api/v1/repayments",
                 "/api/v1/extension-requests",
+                "/api/v1/closure-requests",
                 "/api/v1/notifications",
                 "/api/v1/notification-preferences",
                 "/api/v1/summary",

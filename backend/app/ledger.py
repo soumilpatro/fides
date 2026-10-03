@@ -17,12 +17,14 @@ from app.api.ledger_schemas import LedgerResponse
 from app.api.term_schemas import TermsRequest
 from app.auth.authorization import AuthorizationService
 from app.auth.safety import auth_operation
+from app.closure_provenance import validate_closure
 from app.core.errors import AuthError
 from app.core.validation import normalize_timezone
 from app.models.commitment import Commitment
 from app.models.commitment_terms_version import CommitmentTermsVersion
 from app.models.extension_request import ExtensionRequest
 from app.models.ledger_event import LedgerEvent
+from app.models.mutual_closure_request import MutualClosureRequest
 from app.models.repayment import Repayment
 from app.models.repayment_verification import RepaymentVerification
 from app.models.user import User
@@ -37,6 +39,38 @@ EVENTS = {
     "REPAYMENT_DISPUTED",
 }
 EXTENSION_EVENTS = {"EXTENSION_REQUESTED", "EXTENSION_ACCEPTED", "EXTENSION_REJECTED"}
+CLOSURE_EVENTS = {
+    "MUTUAL_CLOSURE_REQUESTED",
+    "MUTUAL_CLOSURE_ACCEPTED",
+    "MUTUAL_CLOSURE_REJECTED",
+    "MUTUAL_CLOSURE_CANCELLED",
+}
+
+
+def _closure_projection(row, parent, closures):
+    request = closures[UUID(row.event_payload["closure_request_id"])]
+    validate_closure(request, parent)
+    _require(row.amount_minor is None and row.currency is None and row.repayment_id is None)
+    _require(row.terms_version_id is None)
+    status = row.event_type.removeprefix("MUTUAL_CLOSURE_")
+    _require(row.event_payload["status"] == status)
+    if status == "REQUESTED":
+        _require(row.actor_user_id == request.requested_by_user_id)
+        _require(row.occurred_at == request.created_at)
+    else:
+        _require(request.status.value == status and request.decided_at == row.occurred_at)
+        _require(row.actor_user_id == request.decided_by_user_id)
+    details = dict(
+        closure_request_id=request.id,
+        status=status,
+        currency=request.currency,
+        outstanding_snapshot_minor=request.outstanding_snapshot_minor,
+        waived_amount_minor=request.waived_amount_minor,
+    )
+    if status == "ACCEPTED":
+        _require(parent.status.value == "CLOSED" and parent.closed_at == request.decided_at)
+        details["resulting_commitment_status"] = "CLOSED"
+    return details
 
 
 def _extension_projection(row, parent, extensions, terms):
@@ -150,7 +184,14 @@ def _project(db, parent, rows):
     """Check every public reference before building a closed response."""
     verification_ids = set()
     extension_ids, base_ids = set(), set()
+    closure_ids = set()
     for row in rows:
+        if row.event_type in CLOSURE_EVENTS:
+            payload = row.event_payload
+            _require(type(payload) is dict and set(payload) == {"closure_request_id", "status"})
+            _require(all(type(v) is str for v in payload.values()))
+            closure_ids.add(UUID(payload["closure_request_id"]))
+            continue
         if row.event_type in EXTENSION_EVENTS:
             payload = row.event_payload
             _require(type(payload) is dict)
@@ -193,6 +234,7 @@ def _project(db, parent, rows):
         CommitmentTermsVersion, {r.terms_version_id for r in rows if r.terms_version_id} | base_ids
     )
     extensions = load(ExtensionRequest, extension_ids) if extension_ids else {}
+    closures = load(MutualClosureRequest, closure_ids) if closure_ids else {}
     verifications = load(RepaymentVerification, verification_ids)
     participants = {parent.borrower_user_id, parent.lender_user_id}
     result = []
@@ -200,6 +242,21 @@ def _project(db, parent, rows):
         _require(row.commitment_id == parent.id)
         _require(row.actor_user_id in participants and row.actor_user_id in people)
         payload = row.event_payload
+        if row.event_type in CLOSURE_EVENTS:
+            result.append(
+                dict(
+                    id=row.id,
+                    commitment_id=row.commitment_id,
+                    event_type=row.event_type,
+                    actor={
+                        "id": row.actor_user_id,
+                        "display_name": people[row.actor_user_id].display_name,
+                    },
+                    occurred_at=row.occurred_at,
+                    details=_closure_projection(row, parent, closures),
+                )
+            )
+            continue
         if row.event_type in EXTENSION_EVENTS:
             result.append(
                 dict(
