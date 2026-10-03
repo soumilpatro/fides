@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Fides app icon">
-  <rect width="1024" height="1024" fill="#4357B2"/>
-  <g transform="translate(176 208) scale(4.2)">
-    <polygon points="84,16 27,38 16,47 12,108 22,122 61,133 61,115 48,101 44,80 50,63 61,52 85,46" fill="#F7F6F3"/>
-    <polygon points="141,47 103,35 103,53 118,73 118,94 104,114 78,122 78,144 99,143 147,118 150,60" fill="#E07A64"/>
-    <circle cx="82" cy="84" r="28" fill="#DFE6F5"/>
-  </g>
-</svg>
