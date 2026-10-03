@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.logging import sanitize_request_id
+from app.core.logging import sanitize_request_id, set_api_response_headers
 
 logger = logging.getLogger("fides.errors")
 
@@ -138,27 +138,15 @@ class VerificationError(FinancialError):
 
 
 def _is_auth_request(request: Request) -> bool:
-    return request.url.path.startswith(("/api/v1/auth/", "/api/v1/me"))
+    return request.scope["path"].startswith(("/api/v1/auth/", "/api/v1/me"))
 
 
 def _response_headers(
     request: Request, headers: Mapping[str, str] | None = None, *, auth: bool = False
 ) -> dict[str, str]:
     result = MutableHeaders(headers=headers)
-    if (
-        auth
-        or _is_auth_request(request)
-        or request.url.path.startswith(
-            (
-                "/api/v1/connections",
-                "/api/v1/commitments",
-                "/api/v1/repayments",
-                "/api/v1/extension-requests",
-                "/api/v1/notifications",
-                "/api/v1/summary",
-            )
-        )
-    ):
+    set_api_response_headers(result, request.scope["path"])
+    if auth:
         result["Cache-Control"] = "no-store"
     # State survives middleware ContextVar reset, including unhandled 500s.
     request_id = getattr(request.state, "request_id", None)
@@ -171,6 +159,17 @@ def _response_headers(
 def _error_envelope(code: str, message: str) -> dict:
     """Build the stable JSON error shape used across all handlers."""
     return {"error": {"code": code, "message": message}}
+
+
+def request_too_large_response(request: Request) -> JSONResponse:
+    headers = MutableHeaders(headers=_response_headers(request, auth=True))
+    headers["X-Content-Type-Options"] = "nosniff"
+    headers["Referrer-Policy"] = "no-referrer"
+    return JSONResponse(
+        status_code=413,
+        content=_error_envelope("REQUEST_TOO_LARGE", "Request too large."),
+        headers=dict(headers),
+    )
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -243,7 +242,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 code = "MALFORMED_REQUEST"
             elif types == {"invalid_phone"}:
                 code = "INVALID_PHONE"
-        if request.url.path.startswith(
+        if request.scope["path"].startswith(
             (
                 "/api/v1/connections",
                 "/api/v1/commitments",
@@ -255,12 +254,12 @@ def register_exception_handlers(app: FastAPI) -> None:
         ):
             if any(error["type"] == "json_invalid" for error in exc.errors()):
                 code = "MALFORMED_REQUEST"
-        if request.url.path.startswith("/api/v1/commitments") and code != "MALFORMED_REQUEST":
-            if request.url.path.endswith("/repayments") and any(
+        if request.scope["path"].startswith("/api/v1/commitments") and code != "MALFORMED_REQUEST":
+            if request.scope["path"].endswith("/repayments") and any(
                 error["loc"] == ("body", "amount_minor") for error in exc.errors()
             ):
                 return await financial_exception_handler(request, FinancialError("INVALID_AMOUNT"))
-            if not request.url.path.endswith(("/repayments", "/extension-requests")) and any(
+            if not request.scope["path"].endswith(("/repayments", "/extension-requests")) and any(
                 error["loc"] == ("body", "principal_amount_minor") for error in exc.errors()
             ):
                 return await financial_exception_handler(request, FinancialError("INVALID_AMOUNT"))

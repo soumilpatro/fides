@@ -24,12 +24,45 @@ import uuid
 from contextvars import ContextVar
 from typing import Any
 
+from starlette.datastructures import MutableHeaders
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
 _REQUEST_ID_HEADER = "X-Request-ID"
 _request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
+
+
+def set_api_response_headers(headers: MutableHeaders, path: str) -> None:
+    """Classify using the ASGI routing path, never a Host-reconstructed URL."""
+    if path.startswith("/api/v1/"):
+        headers["X-Content-Type-Options"] = "nosniff"
+        headers["Referrer-Policy"] = "no-referrer"
+    if path.startswith(
+        (
+            "/api/v1/auth/",
+            "/api/v1/me",
+            "/api/v1/connections",
+            "/api/v1/commitments",
+            "/api/v1/repayments",
+            "/api/v1/extension-requests",
+            "/api/v1/notifications",
+            "/api/v1/summary",
+        )
+    ):
+        headers["Cache-Control"] = "no-store"
+
+
+class _SafeASGIExceptionFilter(logging.Filter):
+    """Uvicorn re-logs exceptions after Starlette has returned a safe 500."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.msg == "Exception in ASGI application\n":
+            record.args = ()
+            record.exc_info = None
+            record.exc_text = None
+            record.stack_info = None
+        return True
 
 
 def sanitize_request_id(value: str | None) -> str:
@@ -79,6 +112,9 @@ def configure_logging(log_level: str = "INFO") -> None:
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.setFormatter(_JsonFormatter())
     root.addHandler(handler)
+    server_logger = logging.getLogger("uvicorn.error")
+    if not any(isinstance(item, _SafeASGIExceptionFilter) for item in server_logger.filters):
+        server_logger.addFilter(_SafeASGIExceptionFilter())
 
 
 class RequestCorrelationMiddleware(BaseHTTPMiddleware):
@@ -100,19 +136,7 @@ class RequestCorrelationMiddleware(BaseHTTPMiddleware):
         finally:
             _request_id_ctx.reset(token)
         response.headers[_REQUEST_ID_HEADER] = request_id
-        if request.url.path.startswith(
-            (
-                "/api/v1/auth/",
-                "/api/v1/me",
-                "/api/v1/connections",
-                "/api/v1/commitments",
-                "/api/v1/repayments",
-                "/api/v1/extension-requests",
-                "/api/v1/notifications",
-                "/api/v1/summary",
-            )
-        ):
-            response.headers["Cache-Control"] = "no-store"
+        set_api_response_headers(response.headers, request.scope["path"])
         return response
 
 

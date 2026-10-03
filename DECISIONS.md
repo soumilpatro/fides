@@ -6508,3 +6508,169 @@ Do not include new endpoints, F1/frontend work, settlement/waiver, overdue/defau
 ### 23. Validation expectation
 
 B13 implementation must eventually run focused B13 reliability tests, affected B2–B12 regressions, the full backend suite, Ruff, formatter check, `pip check`, and `git diff --check`. No wholesale skips.
+
+## B14-D0 — APPROVED — Security Hardening Contract
+
+B14 is a bounded security-hardening pass. Its objective is to inspect, verify, test, and fix demonstrated security defects while preserving the current approved product, API, and financial behavior.
+
+### Audit scope
+
+The read-only audit and any later approved implementation may cover:
+
+- authorization and IDOR boundaries across accounts, connections, commitments, repayments, verification/dispute, ledger/history, extensions, notifications, profiles, summaries, and UUID-addressable resources;
+- OTP authentication, session and token issuance/revocation, deactivated-account behavior, revalidation, authentication failures, and sensitive-value handling;
+- FastAPI/Pydantic validation, malformed identifiers, oversized strings and pages, malformed money/currency/date/timezone input, and request-size protection, with an approximately 1 MiB production request ceiling unless the architecture requires a smaller approved limit;
+- production CORS, browser-facing behavior, and security headers appropriate to the bearer-token architecture;
+- secrets and configuration, logging and error handling, proxy/deployment assumptions, health/readiness exposure, database least privilege, and declared dependency risk; and
+- security testing for IDOR, unauthorized participant access, auth/session misuse, malformed or oversized requests, production configuration failures, CORS, secret/log leakage, privacy-safe unavailable/not-found behavior, financial invariants, and B13 reliability behavior.
+
+### Explicit exclusions
+
+B14 must not redesign authentication, add OAuth/social login, MFA, passwords, new product features, frontend functionality, Mutual Closure, reminders, notification preferences, Upcoming/Overdue behavior, or infrastructure without demonstrated need. It must not change financial semantics, money calculations, commitment lifecycle, repayment verification, extension rules, or B13 concurrency, idempotency, isolation, and reliability behavior. It must not introduce migrations, dependencies, indexes, or other schema changes unless a later audited defect absolutely requires one and approval is obtained first.
+
+### Stop conditions
+
+If a demonstrated defect requires an API contract change, migration or other schema change, new dependency, authentication-architecture change, financial-behavior change, or substantial infrastructure change, stop and request approval before implementation. Do not fix hypothetical or speculative issues.
+
+### Production security gate
+
+The production gate is fail-closed configuration, safe authentication and session handling, privacy-preserving authorization and errors, no sensitive secret or financial-data leakage, appropriate CORS and security headers, safe proxy and health assumptions, least-privilege runtime expectations, and focused regression evidence. Existing approved behavior remains authoritative unless a demonstrated security defect is fixed through the bounded process.
+
+Only demonstrated defects may be fixed. Every fix requires a focused test, demonstration of the prior result, the smallest in-scope change, and affected regression tests. Preserve B13 transaction, isolation, lock-ordering, idempotency, and diagnostic behavior.
+
+### B14 execution order
+
+1. Approved docs checkpoint.
+2. Read-only security audit.
+3. Review audit findings.
+4. Approve a bounded implementation plan.
+5. Implement demonstrated fixes.
+6. Run focused security tests.
+7. Run full backend regression.
+8. Perform the final security gate.
+
+No implementation occurs before step 4.
+
+## B14-D1 — APPROVED — Security implementation scope
+
+### A. Request body size limit
+
+Maximum HTTP request body:
+
+1 MiB = 1,048,576 bytes
+
+Rules:
+
+- exactly 1,048,576 bytes is allowed;
+- any body larger than 1,048,576 bytes is rejected;
+- rejection status: HTTP 413 Payload Too Large;
+- public error code: `REQUEST_TOO_LARGE`;
+- use the existing standard public error envelope;
+- do not expose parser, framework, or body-size internals;
+- preserve correlation/request ID behavior;
+- preserve safe cache/security headers;
+- reject clearly oversized declared `Content-Length` before service/provider execution;
+- `Content-Length` is not trusted as the only enforcement mechanism;
+- missing, misleading, or streamed/chunked bodies must be counted by actual bytes;
+- stop reading once the ceiling is exceeded;
+- valid requests must remain readable downstream;
+- no dependency is added;
+- no OTP/rate-limit semantics are changed.
+
+### B. Malformed Host / raw path correction
+
+Security-sensitive path classification must use the authoritative ASGI request path rather than reconstructed `request.url.path` where malformed Host could influence URL reconstruction.
+
+Requirements:
+
+- use `request.scope["path"]` or an equivalent authoritative raw request path;
+- preserve routing behavior;
+- preserve authorization;
+- preserve public error taxonomy;
+- preserve cache policy;
+- no FastAPI/Starlette upgrade in B14;
+- no proxy redesign;
+- no dependency change.
+
+### C. API security headers
+
+Add bounded API response headers:
+
+- `X-Content-Type-Options: nosniff`;
+- `Referrer-Policy: no-referrer`.
+
+Requirements:
+
+- apply to normal API success responses;
+- apply to handled API error responses;
+- apply to 413 responses;
+- preserve existing `Cache-Control`;
+- preserve `WWW-Authenticate`;
+- preserve request/correlation IDs;
+- preserve `Retry-After` where already present.
+
+Do not add in this backend task:
+
+- frontend CSP;
+- frontend frame policy;
+- local/dev HSTS;
+- CSRF infrastructure;
+- unrelated security headers.
+
+HSTS/CSP/frame policy remain deployment/web-host concerns.
+
+### D. Implementation limits
+
+B14-D1 does not approve:
+
+- migrations;
+- dependency upgrades;
+- auth redesign;
+- API redesign beyond the approved 413 / `REQUEST_TOO_LARGE` contract;
+- financial behavior changes;
+- B13 transaction/lock/idempotency changes;
+- frontend changes;
+- new product features;
+- Mutual Closure;
+- reminders;
+- Notification Preferences;
+- Upcoming/Overdue endpoints.
+
+If implementation later requires any of those, stop and request approval.
+
+### E. Required validation
+
+Implementation must include focused regression coverage for:
+
+- body-size boundary;
+- streamed/misleading `Content-Length` bypass attempts;
+- provider/service not invoked for oversized bodies;
+- 413 error envelope;
+- malformed Host path invariance;
+- no-store preservation;
+- security headers on success/error paths;
+- authz unchanged;
+- B13 behavior unchanged;
+- financial invariants unchanged.
+
+Then run the appropriate full backend regression before B14 completion.
+
+### B14 implementation evidence
+
+The request admission middleware runs before correlation middleware, route dependencies, JSON parsing, and services. It rejects clearly oversized declared Content-Length without reading the body; otherwise it counts actual received bytes, stops at the first over-limit chunk, and retains no over-limit chunk. Its bounded buffer admits exactly 1,048,576 bytes and replays admitted bodies downstream. This also covers handlers that do not read bodies. HTTP 413 returns the standard envelope with `REQUEST_TOO_LARGE` and the fixed message `Request too large.`; correlation IDs use the existing sanitizer. OpenAPI documents 413 globally; existing endpoint request schemas and the closed B2 auth error catalog are unchanged.
+
+Cache and validation classification now use `request.scope["path"]`. API successes and handled errors carry `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. Early 413s use the same policies, no-store, and sanitized request IDs. Existing WWW-Authenticate and Retry-After values remain intact. A focused regression caught duplicate differently cased headers on 413; response construction now uses case-insensitive MutableHeaders to prevent duplication.
+
+The initial focused regressions demonstrated oversized OTP acceptance, malformed-Host cache-policy bypass, and a real Uvicorn ASGI request-cycle log containing a synthetic exception sentinel after the safe application 500 response. The logging correction is limited to the existing `uvicorn.error` ASGI-exception record: it removes exception/stack text while retaining the generic ERROR event. It does not change B13 diagnostics, transaction behavior, or other logger records. Verification uses Uvicorn's installed h11 RequestResponseCycle with an in-memory transport, not merely TestClient logging and not a deployed reverse proxy.
+
+Focused validation passed: 120 tests, including 66 new B14 cases and existing error regressions. Coverage includes byte boundaries, missing/misleading declared length, whitespace-padded oversized Content-Length, streamed rejection and stopped reads, downstream replay, no dispatch for oversized requests, malformed-Host auth and financial validation, safe error/header behavior, and 18 PostgreSQL-backed checks using the actual B2 principal resolver and B3 participant service. The earlier broader affected-regression run had 565 passes and four duplicate-header failures; all four were corrected and passed in the focused rerun. The first full run was interrupted to add the final declared-length whitespace correction before running the complete final suite.
+
+Final complete backend regression passed: 2,633 tests, zero failures, zero skips. This includes B2-B13 authentication, authorization, financial, notification, summary, extension, and reliability regressions. The one warning is the existing Starlette TestClient use of a deprecated AnyIO BlockingPortal alias; no dependency is changed to address it. Financial service code and B13 transaction/isolation/locking/idempotency code remain unchanged.
+
+Application and new B14 test Ruff checks pass. All 12 changed/new Python files pass formatter checks; pip check and git diff --check pass. Repository-wide Ruff retains seven pre-existing B12 summary-test I001 import-order findings. Only the existing summary OpenAPI assertion changes outside the main B14 file areas, adding the approved 413 status; its pre-existing import block is untouched.
+
+### Deployment verification and deferred B15 gates
+
+Cross-origin preflight remains restrictive: untrusted browser origins receive no Access-Control-Allow-Origin or credential permission. No CORS middleware or cookie/CSRF architecture is introduced. The existing trusted-peer forwarding-header policy and documented --no-proxy-headers / --no-access-log launch requirements remain authoritative.
+
+The existing local fides_test database was reachable at the configured port and migration 012 before tests. Read-only role inspection confirmed its documented broad local-development privileges; this is not evidence of production least privilege. Separate production migration/runtime credentials, runtime DDL denial, and ledger/audit UPDATE/DELETE denial must be verified under externally provisioned production-style credentials as a B15/deployment gate. No roles, grants, credentials, or migration files are introduced here. Production TLS/HSTS, web-host CSP/frame policy, and proxy/platform log privacy remain deployment concerns.

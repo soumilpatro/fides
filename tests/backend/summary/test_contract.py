@@ -106,7 +106,7 @@ def test_openapi():
     op = path["get"]
     assert op["security"] == [{"HTTPBearer": []}]
     assert not op.get("parameters") and "requestBody" not in op
-    assert set(op["responses"]) == {"200", "400", "401", "403", "422", "500", "503"}
+    assert set(op["responses"]) == {"200", "400", "401", "403", "413", "422", "500", "503"}
     for response in op["responses"].values():
         assert {"Cache-Control", "X-Request-ID"} <= set(response["headers"])
     schemas = spec["components"]["schemas"]
