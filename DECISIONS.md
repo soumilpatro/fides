@@ -6997,3 +6997,77 @@ identified fixture records were cleaned only from fides_test before the final
 run. The existing Starlette deprecation warning and six import-order findings
 in untouched B12 tests remain non-blocking; one previously affected B12 file
 was necessarily updated for CLOSED exclusion and now passes changed-file checks.
+
+## Upcoming D0 — APPROVED
+
+Upcoming is server-derived. Frontend clients must not independently calculate
+upcoming commitments.
+
+The window is today through today plus 7 calendar days, inclusive, using the
+borrower due timezone from the authoritative current terms. Due today counts as
+Upcoming. Grace does not extend the window; after the due date a commitment may
+temporarily be neither Upcoming nor Overdue while still within grace.
+
+Only ACTIVE and PARTIALLY_REPAID commitments with positive authoritative
+verified outstanding are eligible. PENDING_CONFIRMATION, REJECTED, CANCELLED,
+FULLY_REPAID, CLOSED, and DEFAULTED are excluded. Commitments without a due
+date are excluded. Current authoritative/latest effective terms control the
+result, so accepted extensions change future derived results. Only VERIFIED
+repayments reduce outstanding; PENDING_VERIFICATION and DISPUTED repayments do
+not.
+
+Installment schedules may produce informational Upcoming occurrences. Do not
+claim installment unpaid amount, installment-level outstanding, or installment
+allocation without authoritative backend allocation. Do not aggregate upcoming
+money totals; expose commitment-level verified outstanding only. Order by
+earliest due date, then a stable deterministic identifier. The user-facing label
+is “Upcoming — next 7 days”.
+
+## Overdue D0 — APPROVED
+
+Overdue is server-derived and does not mutate Commitment.status. DEFAULTED is a
+separate state and is never automatic; overdue calculation must never mark a
+commitment DEFAULTED.
+
+Only ACTIVE and PARTIALLY_REPAID commitments with positive authoritative
+verified outstanding are eligible. Overdue starts at due_date plus the grace
+period plus one calendar day, using the borrower due timezone. No due date
+means never Overdue. Only VERIFIED repayments reduce authoritative outstanding;
+pending and disputed repayments do not, and zero verified outstanding removes
+the item from Overdue. Accepted extensions control the current due date.
+
+Installment occurrences may be surfaced conservatively without inferring or
+exposing installment-level unpaid monetary amounts. CLOSED commitments are
+excluded. Derived Overdue calculation has no side effects: it does not mutate
+status, append financial ledger events, create notifications, charge fees,
+change trust or reputation, or create DEFAULTED state.
+
+## Upcoming / Overdue API Technical Contract T0 — APPROVED
+
+The approved routes are:
+
+- `GET /api/v1/summary/upcoming`
+- `GET /api/v1/summary/overdue`
+
+Existing `GET /api/v1/summary` remains unchanged.
+
+Responses use the envelope `{ "items": [...], "next_cursor": "..." | null }`.
+The default limit is 50, the maximum is 100, and pagination uses an opaque
+keyset cursor with no offset pagination.
+
+Each item includes `commitment_id`, counterparty `id` and `display_name`, role
+(`BORROWER` or `LENDER`), currency, `verified_outstanding_minor`, `due_date`,
+`due_timezone`, `schedule_mode`, and `installment_id` (a UUID for an installment
+occurrence or null for a commitment-level occurrence). Optional derived fields
+such as `days_until_due` or `days_overdue` may be added only when necessary and
+bounded. No monetary installment-level fields are allowed.
+
+Upcoming and Overdue are authenticated, participant-scoped, read-only
+server-derived queries using current authoritative financial and terms state,
+borrower-local dates, existing accounting and corruption-safe validation
+helpers, bounded reads, stable ordering, and no writes. They must preserve B14
+no-store, security headers, correlation behavior, request limits, and raw-path
+classification. Upcoming covers borrower-local today through today plus 7 days,
+including today; Overdue requires borrower-local today to be at least due date
+plus grace plus one day and positive verified outstanding. Installment rows are
+schedule context only and never imply allocation.
