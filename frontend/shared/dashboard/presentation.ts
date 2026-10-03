@@ -20,7 +20,6 @@ export function historyText(event:TimelineEvent){
  case "MUTUAL_CLOSURE_REJECTED":return "Rejected the mutual-closure request.";
  case "MUTUAL_CLOSURE_CANCELLED":return "Cancelled the mutual-closure request.";
  }
- }
 }
 export function appendHistory(previous:TimelineEvent[],incoming:TimelineEvent[]){
  const ids=new Set(previous.map(row=>row.id));return [...previous,...incoming.filter(row=>{if(ids.has(row.id))return false;ids.add(row.id);return true;})];
