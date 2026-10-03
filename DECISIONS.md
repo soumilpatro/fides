@@ -6654,3 +6654,23 @@ Implementation must include focused regression coverage for:
 - financial invariants unchanged.
 
 Then run the appropriate full backend regression before B14 completion.
+
+### B14 implementation evidence
+
+The request admission middleware runs before correlation middleware, route dependencies, JSON parsing, and services. It rejects clearly oversized declared Content-Length without reading the body; otherwise it counts actual received bytes, stops at the first over-limit chunk, and retains no over-limit chunk. Its bounded buffer admits exactly 1,048,576 bytes and replays admitted bodies downstream. This also covers handlers that do not read bodies. HTTP 413 returns the standard envelope with `REQUEST_TOO_LARGE` and the fixed message `Request too large.`; correlation IDs use the existing sanitizer. OpenAPI documents 413 globally; existing endpoint request schemas and the closed B2 auth error catalog are unchanged.
+
+Cache and validation classification now use `request.scope["path"]`. API successes and handled errors carry `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. Early 413s use the same policies, no-store, and sanitized request IDs. Existing WWW-Authenticate and Retry-After values remain intact. A focused regression caught duplicate differently cased headers on 413; response construction now uses case-insensitive MutableHeaders to prevent duplication.
+
+The initial focused regressions demonstrated oversized OTP acceptance, malformed-Host cache-policy bypass, and a real Uvicorn ASGI request-cycle log containing a synthetic exception sentinel after the safe application 500 response. The logging correction is limited to the existing `uvicorn.error` ASGI-exception record: it removes exception/stack text while retaining the generic ERROR event. It does not change B13 diagnostics, transaction behavior, or other logger records. Verification uses Uvicorn's installed h11 RequestResponseCycle with an in-memory transport, not merely TestClient logging and not a deployed reverse proxy.
+
+Focused validation passed: 120 tests, including 66 new B14 cases and existing error regressions. Coverage includes byte boundaries, missing/misleading declared length, whitespace-padded oversized Content-Length, streamed rejection and stopped reads, downstream replay, no dispatch for oversized requests, malformed-Host auth and financial validation, safe error/header behavior, and 18 PostgreSQL-backed checks using the actual B2 principal resolver and B3 participant service. The earlier broader affected-regression run had 565 passes and four duplicate-header failures; all four were corrected and passed in the focused rerun. The first full run was interrupted to add the final declared-length whitespace correction before running the complete final suite.
+
+Final complete backend regression passed: 2,633 tests, zero failures, zero skips. This includes B2-B13 authentication, authorization, financial, notification, summary, extension, and reliability regressions. The one warning is the existing Starlette TestClient use of a deprecated AnyIO BlockingPortal alias; no dependency is changed to address it. Financial service code and B13 transaction/isolation/locking/idempotency code remain unchanged.
+
+Application and new B14 test Ruff checks pass. All 12 changed/new Python files pass formatter checks; pip check and git diff --check pass. Repository-wide Ruff retains seven pre-existing B12 summary-test I001 import-order findings. Only the existing summary OpenAPI assertion changes outside the main B14 file areas, adding the approved 413 status; its pre-existing import block is untouched.
+
+### Deployment verification and deferred B15 gates
+
+Cross-origin preflight remains restrictive: untrusted browser origins receive no Access-Control-Allow-Origin or credential permission. No CORS middleware or cookie/CSRF architecture is introduced. The existing trusted-peer forwarding-header policy and documented --no-proxy-headers / --no-access-log launch requirements remain authoritative.
+
+The existing local fides_test database was reachable at the configured port and migration 012 before tests. Read-only role inspection confirmed its documented broad local-development privileges; this is not evidence of production least privilege. Separate production migration/runtime credentials, runtime DDL denial, and ledger/audit UPDATE/DELETE denial must be verified under externally provisioned production-style credentials as a B15/deployment gate. No roles, grants, credentials, or migration files are introduced here. Production TLS/HSTS, web-host CSP/frame policy, and proxy/platform log privacy remain deployment concerns.

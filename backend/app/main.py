@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.auth import initialize_auth
+from app.api.auth import AuthErrorEnvelope, initialize_auth
 from app.api.auth import router as auth_router
 from app.api.commitments import router as commitments_router
 from app.api.connections import router as connections_router
@@ -33,6 +33,7 @@ from app.api.verification import router as verification_router
 from app.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import RequestCorrelationMiddleware, configure_logging
+from app.core.request_limits import RequestBodyLimitMiddleware
 
 
 def create_app() -> FastAPI:
@@ -59,6 +60,18 @@ def create_app() -> FastAPI:
     app = FastAPI(
         lifespan=lifespan,
         title=settings.app_name,
+        responses={
+            413: {
+                "model": AuthErrorEnvelope,
+                "description": "REQUEST_TOO_LARGE",
+                "headers": {
+                    "Cache-Control": {"schema": {"type": "string", "const": "no-store"}},
+                    "X-Request-ID": {"schema": {"type": "string"}},
+                    "X-Content-Type-Options": {"schema": {"type": "string", "const": "nosniff"}},
+                    "Referrer-Policy": {"schema": {"type": "string", "const": "no-referrer"}},
+                },
+            }
+        },
         description=(
             "FIDES shared backend. See FIDES_TECH_SPECIFICATION_v1.1 and "
             "FIDES_API_SPECIFICATION_v1.0 for the full product/API contract. "
@@ -67,6 +80,9 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(RequestCorrelationMiddleware)
+    # Admission is outermost: no inner streaming/disconnect task can read
+    # further bytes after rejection. Early errors use the same ID sanitizer.
+    app.add_middleware(RequestBodyLimitMiddleware)
     register_exception_handlers(app)
 
     app.include_router(health_router)
