@@ -12,7 +12,14 @@ export function historyText(event:TimelineEvent){
  case "REPAYMENT_REPORTED":return "Reported a repayment of "+formatMoney(event.details.amount_minor,event.details.currency)+".";
  case "REPAYMENT_VERIFIED":return "Verified a repayment of "+formatMoney(event.details.amount_minor,event.details.currency)+".";
  case "REPAYMENT_DISPUTED":return "Disputed a repayment of "+formatMoney(event.details.amount_minor,event.details.currency)+".";
- default:return "Recorded a due-date change: "+event.details.status.toLowerCase()+".";
+ case "EXTENSION_REQUESTED":return "Requested a due-date extension.";
+ case "EXTENSION_ACCEPTED":return "Accepted a due-date extension.";
+ case "EXTENSION_REJECTED":return "Rejected a due-date extension.";
+ case "MUTUAL_CLOSURE_REQUESTED":return "Requested mutual closure. Verified outstanding reviewed: "+formatMoney(event.details.outstanding_snapshot_minor,event.details.currency)+".";
+ case "MUTUAL_CLOSURE_ACCEPTED":return "Closed by mutual agreement. Waived amount: "+formatMoney(event.details.waived_amount_minor,event.details.currency)+".";
+ case "MUTUAL_CLOSURE_REJECTED":return "Rejected the mutual-closure request.";
+ case "MUTUAL_CLOSURE_CANCELLED":return "Cancelled the mutual-closure request.";
+ }
  }
 }
 export function appendHistory(previous:TimelineEvent[],incoming:TimelineEvent[]){
