@@ -6919,3 +6919,42 @@ Operational details and frontend coordination are documented in `docs/reminders.
 Validation on the existing local `fides_test` PostgreSQL database: 129 focused reminder/preference tests passed, including 16 concurrency, 7 migration, and 9 retention tests; the existing notification HTTP/OpenAPI contract suite passed all 36 tests. The final full backend regression passed 2,762 tests with zero failures or skips, covering mandatory workflows, B2-B14 regressions, and financial invariants. Alembic repository/test-database head is `013`; migration tests verify `012 -> 013`, preserved workflow data, metadata/constraints, pre-existing reminder refusal, and downgrade data-loss guards. Both one-shot job commands exited 0 on an empty test inbox, with zero created/deleted rows.
 
 Ruff and formatter checks passed for all 31 changed/new Python files; `pip check` and `git diff --check` passed. No separate type checker is configured. Repository-wide Ruff retains seven pre-existing I001 import-order findings in unchanged B12 summary tests; they are outside this change. The existing Starlette/AnyIO BlockingPortal deprecation warning is non-blocking. B15 scheduling/least privilege and separate frontend reminder compatibility remain release coordination items.
+
+## Mutual Closure D0 — APPROVED
+
+Mutual Closure is not repayment. It represents both parties explicitly agreeing to close an outstanding commitment with the remaining verified outstanding amount waived. `FULLY_REPAID` means verified repayments reduced outstanding to zero; `CLOSED` means the parties mutually agreed to waive the remaining verified outstanding. User-facing wording is “Closed by mutual agreement”; CLOSED must never be presented as fully repaid.
+
+A closure request may be created only for `ACTIVE` or `PARTIALLY_REPAID` commitments. It is not allowed for `PENDING_CONFIRMATION`, `REJECTED`, `CANCELLED`, `FULLY_REPAID`, `CLOSED`, or `DEFAULTED`. No automatic relationship to Connection state is required.
+
+Either borrower or lender may propose. The other party must accept; there is no unilateral forgiveness and the requester cannot accept their own request. The requester may cancel while `REQUESTED`; the counterparty may accept or reject. At most one `REQUESTED` request exists per commitment, while historical `ACCEPTED`, `REJECTED`, and `CANCELLED` requests remain auditable.
+
+Each request targets the full current authoritative verified outstanding amount. There is no custom partial waiver or user-entered waiver amount. The server derives `outstanding_snapshot_minor` and `waived_amount_minor`; at creation the waived amount equals authoritative verified outstanding, in the commitment currency. Pending repayment verification blocks final acceptance. Disputed repayments remain historical and do not reduce authoritative verified outstanding.
+
+Acceptance must lock and revalidate the authoritative commitment state, recompute verified outstanding, verify no pending verification blocks closure, verify eligibility, and compare the recomputed value with the stored snapshot. If it differs, acceptance returns a conflict and does not silently adjust the waiver. Successful acceptance atomically marks the request `ACCEPTED`, transitions the commitment to `CLOSED`, sets `closed_at`, records the authoritative waived amount, appends a closure ledger event, and preserves repayment/dispute history. CLOSED is terminal for new repayment reporting, verification, extension, closure, and other live financial mutations. Frontend presentation must show verified repayments and waived amount separately; no repayment or verification row represents the waiver. CLOSED commitments are excluded from active outstanding summaries while history remains available.
+
+## Mutual Closure Technical Contract T0 — APPROVED
+
+Routes:
+
+- `POST /api/v1/commitments/{id}/closure-requests`
+- `GET /api/v1/commitments/{id}/closure-requests`
+- `GET /api/v1/closure-requests/{id}`
+- `POST /api/v1/closure-requests/{id}/accept`
+- `POST /api/v1/closure-requests/{id}/reject`
+- `POST /api/v1/closure-requests/{id}/cancel`
+
+There is no PATCH route. Add the dedicated `mutual_closure_requests` table with UUID/timestamp conventions and fields `id`, `commitment_id`, `requested_by_user_id`, `counterparty_user_id`, `status`, `currency`, `outstanding_snapshot_minor`, `waived_amount_minor`, `note`, `decided_by_user_id`, `decided_at`, `created_at`, and `updated_at`. Statuses are `REQUESTED`, `ACCEPTED`, `REJECTED`, and `CANCELLED`; database enforcement should ensure one REQUESTED row per commitment. Exact migration details must be inspected against the current migration head before implementation.
+
+Create is participant-only and either participant may request when the commitment is eligible, verified outstanding is positive, and no REQUESTED request exists. The server determines counterparty, currency, snapshot, and waiver. The optional note is at most 500 characters; no client financial amount is accepted. Use existing idempotency conventions where applicable.
+
+List is participant-only and returns historical requests in stable order. Detail is participant-only with generic unavailable/IDOR-safe behavior. Accept is counterparty-only and must lock/revalidate users/resources using current Fides lock order, require REQUESTED and eligible state, reject pending verification, recompute outstanding, and compare the snapshot. A mismatch returns conflict, leaves the request REQUESTED, and requires a fresh proposal after cancellation or rejection as appropriate. Success sets the decision fields, closes the commitment, and appends `MUTUAL_CLOSURE_ACCEPTED` atomically.
+
+Reject is counterparty-only and transitions REQUESTED to REJECTED without financial-state changes, appending `MUTUAL_CLOSURE_REJECTED`. Cancel is requester-only and transitions REQUESTED to CANCELLED without financial-state changes, appending `MUTUAL_CLOSURE_CANCELLED`. Creation appends `MUTUAL_CLOSURE_REQUESTED`. Do not emit `REPAYMENT_REPORTED` or `REPAYMENT_VERIFIED` for closure.
+
+Ledger payloads contain only minimal authoritative closure references/state required for historical projection; private notes and unnecessary sensitive/free-form data are excluded. Protect simultaneous creates, accept/reject/cancel, repayment or verification races, extension races, replayed mutations, stale snapshots, and double close using existing B13 lock ordering and idempotency conventions. Replays return the original authoritative result and conflicting keys preserve `IDEMPOTENCY_CONFLICT` semantics.
+
+Only commitment participants may access closure requests. Create is either participant; accept/reject are counterparty-only; cancel is requester-only. Authoritative outstanding remains obligation minus VERIFIED repayments. Closure is a separate waiver and does not alter accounting helper semantics or represent repayment. Accepted closure sets `Commitment.status = CLOSED` and `closed_at` at acceptance time; CLOSED is terminal for new financial actions while history remains readable.
+
+Use an additive, non-destructive migration after inspecting the post-B11-R migration head. Do not rewrite historical commitment or repayment data. Required validation includes eligibility and role rules, one pending request, note and amount derivation, verified/pending/disputed semantics, IDOR, idempotency, snapshot conflict, repayment/verification/extension races, double and competing transitions, CLOSED-state blocking, ledger events, history, summaries, and no fake repayment. Acceptance must close only when both parties explicitly agree to waive exactly the same server-authoritative verified outstanding amount revalidated atomically.
+
+Implementation flow is: docs checkpoint; read-only audit; inspect migration head, B13 locks/idempotency, accounting and verification; bounded plan; additive persistence/API/service; ledger projection; CLOSED integration; concurrency/idempotency tests; focused and full regression; review; then merge only after approval. Stop if implementation requires changing accounting, representing waiver as repayment, changing B13 lock order, destructive migration, a new dependency or broker, automatic DEFAULTED behavior, unilateral forgiveness, partial custom waiver, frontend work, unrelated API redesign, or custody/payment movement.
