@@ -19,7 +19,7 @@ export function useNotificationPreferences(){
     finally{flight.current=false;if(mounted.current)setBusy(false);}
   },[notificationPreferences,session]);
 
-  useEffect(()=>{mounted.current=true;void refresh();return()=>{mounted.current=false;};},[refresh]);
+  useEffect(()=>{mounted.current=true;let active=true;queueMicrotask(()=>{if(active)void refresh();});return()=>{active=false;mounted.current=false;};},[refresh]);
 
   const setPreference=async(field:keyof NotificationPreferences,value:boolean)=>{
     if(flight.current||!data)return false;
