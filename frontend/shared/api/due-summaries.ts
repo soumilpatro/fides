@@ -24,32 +24,33 @@ const object=(v:unknown):Record<string,unknown>=>v&&typeof v==="object"&&!Array.
 const uuid=(v:unknown)=>typeof v==="string"&&connectionUuid.test(v)?v:fail();
 const text=(v:unknown)=>typeof v==="string"&&v.length>0?v:fail();
 const date=(v:unknown)=>typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+"T00:00:00Z"))?v:fail();
+const dueRole=(v:unknown):DueRole=>v==="BORROWER"||v==="LENDER"?v:fail();
+const currency=(v:unknown):Currency=>v==="INR"||v==="USD"||v==="GBP"?v:fail();
+const scheduleMode=(v:unknown):DueSummaryItem["schedule_mode"]=>v==="single"||v==="installments"?v:fail();
+const positiveMinor=(v:unknown):number=>typeof v==="number"&&Number.isSafeInteger(v)&&v>=1?v:fail();
 
 export function dueSummaryItemResponse(value:unknown):DueSummaryItem{
-  const row=object(value),person=object(row.counterparty),amount=row.verified_outstanding_minor,role=row.role,currency=row.currency,scheduleMode=row.schedule_mode;
-  if(typeof amount!=="number"||!Number.isSafeInteger(amount)||amount<1)fail();
-  if(role!=="BORROWER"&&role!=="LENDER")fail();
-  if(currency!=="INR"&&currency!=="USD"&&currency!=="GBP")fail();
-  if(scheduleMode!=="single"&&scheduleMode!=="installments")fail();
-  if(row.installment_id!==null&&!(typeof row.installment_id==="string"&&connectionUuid.test(row.installment_id)))fail();
-  if(scheduleMode==="single"&&row.installment_id!==null)fail();
-  if(scheduleMode==="installments"&&row.installment_id===null)fail();
+  const row=object(value),person=object(row.counterparty);
+  const role=dueRole(row.role),currencyCode=currency(row.currency),outstanding=positiveMinor(row.verified_outstanding_minor),mode=scheduleMode(row.schedule_mode);
+  const installmentId=row.installment_id;
+  if(installmentId!==null&&!(typeof installmentId==="string"&&connectionUuid.test(installmentId)))fail();
+  if(mode==="single"&&installmentId!==null)fail();
+  if(mode==="installments"&&installmentId===null)fail();
   return {
     commitment_id:uuid(row.commitment_id),
     counterparty:{id:uuid(person.id),display_name:text(person.display_name)},
     role,
-    currency,
-    verified_outstanding_minor:amount as number,
+    currency:currencyCode,
+    verified_outstanding_minor:outstanding,
     due_date:date(row.due_date),
     due_timezone:text(row.due_timezone),
-    schedule_mode:scheduleMode,
-    installment_id:row.installment_id as string|null,
+    schedule_mode:mode,
+    installment_id:installmentId as string|null,
   };
 }
 export function dueSummaryPageResponse(value:unknown):DueSummaryPage{
   const row=object(value);
-  const items=row.items;
-  if(!Array.isArray(items))fail();
+  const items=Array.isArray(row.items)?row.items:fail();
   const cursor=row.next_cursor;
   if(!(cursor===null||typeof cursor==="string"&&cursor.length>0&&cursor.length<=512&&!/[\u0000-\u001f\u007f]/.test(cursor)))fail();
   return {items:items.map(dueSummaryItemResponse),next_cursor:cursor as string|null};
