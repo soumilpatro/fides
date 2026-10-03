@@ -11,6 +11,7 @@ import { Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Sc
 import { useCommitments } from "./useCommitments";
 import { ExtensionsSection, NewExtension } from "../extensions/Extensions";
 import { Summary, History } from "../dashboard/Dashboard";
+import { MutualClosureSection } from "../mutual-closure/MutualClosure";
 import { RepaymentsSection, ReportRepayment, RepaymentDetail } from "../repayments/Repayments";
 import { useAuth } from "../auth/useAuth";
 type Destination = {page:"extension";id:string} | { page: "list" } | { page: "new"; connection?: string } | { page: "detail"; id: string } | {page:"report";id:string} | {page:"repayment";id:string;parent:string};
@@ -113,7 +114,7 @@ function CommitmentDetail({ id, onBack, onReport, onRepayment, onRequest }: { id
         <Body>Installment {item.sequence_no} · {item.due_date}</Body><StatusChip label={item.status.replaceAll("_"," ")} />
         <Body>Principal: {formatMoney(item.principal_amount_minor,item.currency)}</Body><Body>Interest: {formatMoney(item.interest_amount_minor,item.currency)}</Body><Body>Total due: {formatMoney(item.total_due_minor,item.currency)}</Body>
       </View>)}</Card>}
-      <ExtensionsSection id={row.id} onRequest={onRequest} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><History key={row.id+":"+revision} id={row.id} onRepayment={onRepayment}/><RepaymentsSection id={row.id} onReport={onReport} onDetail={onRepayment}/>
+      <ExtensionsSection id={row.id} onRequest={onRequest} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><RepaymentsSection id={row.id} onReport={onReport} onDetail={onRepayment}/><MutualClosureSection id={row.id} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><History key={row.id+":"+revision} id={row.id} onRepayment={onRepayment}/>
       {proposalActions(row,data.userId).map(action => {const pending = data.pending(action); return <Button key={action}
         title={pending ? "Retry same " + action : {confirm:"Confirm commitment",reject:"Reject proposal",cancel:"Cancel proposal"}[action]}
         disabled={data.busy || data.actionBlocked(action) || !data.data?.terms || !!pending?.blocked || !!pending?.needsReconcile} onPress={() => setConfirmation(action)} />;})}
