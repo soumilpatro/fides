@@ -2,6 +2,8 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {createMutualClosureApi,mutualClosureResponse,closureBody}=require('../shared/api/mutual-closure.ts');
 const {canRequestMutualClosure,mutualClosureActions,hasPendingRepayment,verifiedRepayments,closureStatusLabel}=require('../shared/mutual-closure/model.ts');
 const {isAllowedApiRoute,isAllowedApiQuery}=require('../shared/api/relay.ts');
+const {ledgerResponse}=require('../shared/api/ledger.ts');
+const {historyText}=require('../shared/dashboard/presentation.ts');
 const A='00000000-0000-4000-8000-000000000001',B='00000000-0000-4000-8000-000000000002',ID='00000000-0000-4000-8000-000000000003',E='00000000-0000-4000-8000-000000000004';
 const person=id=>({id,display_name:id===A?'Riya':'Morgan'});
 const row=(status='REQUESTED')=>({id:E,commitment_id:ID,requested_by:person(A),counterparty:person(B),status,currency:'INR',outstanding_snapshot_minor:12500,waived_amount_minor:12500,note:'Close together',decided_by:status==='REQUESTED'?null:person(B),decided_at:status==='REQUESTED'?null:'2026-10-03T10:00:00Z',created_at:'2026-10-03T09:00:00Z',updated_at:'2026-10-03T10:00:00Z'});
@@ -54,4 +56,20 @@ test('relay exposes only approved closure routes with no query',()=>{
  const approved=[['GET',['commitments',ID,'closure-requests']],['POST',['commitments',ID,'closure-requests']],['GET',['closure-requests',E]],['POST',['closure-requests',E,'accept']],['POST',['closure-requests',E,'reject']],['POST',['closure-requests',E,'cancel']]];
  for(const [method,path] of approved){assert.equal(isAllowedApiRoute(method,path),true);assert.equal(isAllowedApiQuery(path,new URLSearchParams()),true);assert.equal(isAllowedApiQuery(path,new URLSearchParams('x=1')),false);}
  assert.equal(isAllowedApiRoute('DELETE',['closure-requests',E]),false);
+});
+
+test('closure ledger events stay distinct from repayments',()=>{
+ const base={id:E,commitment_id:ID,actor:person(A),occurred_at:'2026-10-03T10:00:00Z'};
+ const cases=[
+  ['MUTUAL_CLOSURE_REQUESTED','REQUESTED','Requested mutual closure.'],
+  ['MUTUAL_CLOSURE_ACCEPTED','ACCEPTED','Closed by mutual agreement.'],
+  ['MUTUAL_CLOSURE_REJECTED','REJECTED','Rejected the mutual-closure request.'],
+  ['MUTUAL_CLOSURE_CANCELLED','CANCELLED','Cancelled the mutual-closure request.'],
+ ];
+ for(const [event_type,status,prefix] of cases){
+  const details={closure_request_id:E,currency:'INR',outstanding_snapshot_minor:12500,waived_amount_minor:12500,status,...(status==='ACCEPTED'?{resulting_commitment_status:'CLOSED'}:{})};
+  const event=ledgerResponse({items:[{...base,event_type,details}],next_cursor:null},ID).items[0];
+  assert.ok(historyText(event).startsWith(prefix));
+  assert.equal('repayment_id' in event.details,false);
+ }
 });
