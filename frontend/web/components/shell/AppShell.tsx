@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Screen } from "../ui";
+import { Brand } from "../Brand";
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
