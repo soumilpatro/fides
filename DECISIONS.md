@@ -6674,3 +6674,186 @@ Application and new B14 test Ruff checks pass. All 12 changed/new Python files p
 Cross-origin preflight remains restrictive: untrusted browser origins receive no Access-Control-Allow-Origin or credential permission. No CORS middleware or cookie/CSRF architecture is introduced. The existing trusted-peer forwarding-header policy and documented --no-proxy-headers / --no-access-log launch requirements remain authoritative.
 
 The existing local fides_test database was reachable at the configured port and migration 012 before tests. Read-only role inspection confirmed its documented broad local-development privileges; this is not evidence of production least privilege. Separate production migration/runtime credentials, runtime DDL denial, and ledger/audit UPDATE/DELETE denial must be verified under externally provisioned production-style credentials as a B15/deployment gate. No roles, grants, credentials, or migration files are introduced here. Production TLS/HSTS, web-host CSP/frame policy, and proxy/platform log privacy remain deployment concerns.
+
+## B11-R Technical Contract T0 — APPROVED
+
+### A. Architecture
+
+Use a DB-backed scheduler job invoked approximately hourly. Do not use Redis, Celery, Kafka, RabbitMQ, a separate broker, or an infinite scheduler loop inside FastAPI web workers. The conceptual job entry point may be `python -m app.jobs.reminders`; deployment scheduling belongs to B15.
+
+### B. Reminder types
+
+Add `UPCOMING_DUE`, `DUE_TODAY`, and `OVERDUE` as NotificationEvent types only. They are not commitment states, ledger event types, or financial mutations.
+
+### C. Recipients and timing
+
+- `UPCOMING_DUE`: borrower only, three borrower-local calendar days before the authoritative contractual due date.
+- `DUE_TODAY`: borrower only, on the borrower-local due date.
+- `OVERDUE`: borrower and lender, only after authoritative overdue eligibility; first on the first eligible reminder date, then every seven local calendar days while still overdue.
+
+Overdue eligibility uses the approved Overdue D0 rule: overdue starts at the borrower-local start of `due_date + grace_period_days + 1 calendar day`. With grace zero, eligibility begins one day after the due date; with grace greater than zero, grace expires first. Recurrence follows the approved seven-day cadence.
+
+### D. Current authoritative terms
+
+Every scheduler run derives from the current authoritative TermsVersion/current due schedule. Accepted extensions immediately replace old future reminder timing. Historical superseded terms must not generate new reminders, and long-lived future reminders must not be precomputed from stale terms.
+
+### E. Verified outstanding
+
+Reminder eligibility requires authoritative verified outstanding greater than zero. Pending or disputed repayments do not reduce verified outstanding. A verified repayment may suppress a reminder when outstanding becomes zero before execution.
+
+### F. Eligible commitment states
+
+Reminder-eligible states are `ACTIVE` and `PARTIALLY_REPAID`. Suppress reminders for `PENDING_CONFIRMATION`, `REJECTED`, `CANCELLED`, `FULLY_REPAID`, and `CLOSED`. There is no automatic `DEFAULTED` transition and no reminder scheduling for no-deadline commitments.
+
+### G. Installment safety
+
+Installment schedule dates may independently drive reminder timing while commitment-level verified outstanding remains positive. Fides MVP has no authoritative repayment-to-installment allocation model, so reminders must not claim that a particular installment is financially unpaid, state a specific installment outstanding amount, or say “₹X overdue installment.” Safe language is schedule/date based, such as “A scheduled payment is due.” An `installment_id` may identify the schedule occurrence only.
+
+### H. Logical reminder identity and dedupe
+
+Each occurrence has deterministic logical identity from `recipient_user_id + reminder_type + commitment_id + installment_id or null + scheduled_local_date`. At most one NotificationEvent may exist for each occurrence. Database uniqueness, not process-local locking alone, must enforce this. The preferred minimal implementation is a nullable `dedupe_key`/`logical_key` on `notification_events` with a unique constraint or index for scheduled reminders; existing mandatory workflow notifications may leave it null. Do not dedupe by querying JSON payload text. Inspect and document the exact migration shape before implementation.
+
+### I. Execution and downtime recovery
+
+Evaluate preferences and authoritative financial state at execution time. If a scheduler runs later on the same logical day, create the still-relevant reminder. Do not create stale historical Upcoming/Due reminders after their applicable day. For overdue recurrence, emit only a currently applicable cadence occurrence; never flood historical reminders after downtime.
+
+### J. Concurrency
+
+Multiple scheduler instances may race. Correctness must rely on the database uniqueness rule; duplicate insertion attempts resolve as already-created/no-op behavior. Do not create duplicate visible reminders. No financial locks are required merely to create reminder notifications.
+
+### K. Transaction and failure semantics
+
+Reminder creation uses short independent transactions. Reminder failure must never roll back a commitment, repayment, or verification; alter terms; create ledger side effects; or change financial state. Notifications remain workflow aids only.
+
+### L. Actor and payload
+
+Scheduled reminders are system-generated; do not fabricate a human actor. Use the current schema’s safe system/null actor representation as appropriate. Payloads remain minimal and authorized and contain no phone numbers, private notes, evidence, tokens, secrets, or internal audit metadata.
+
+### M. Read state
+
+Use existing inbox semantics: `read_at` null means unread and non-null means read. Mark-read is owner-only and repeated mark-read is safe. There is no mark-unread, delete, dismiss, or read-all operation.
+
+### N. Retention
+
+Ordinary in-app notifications, including reminders, use 90-day retention from `created_at`; read/unread status does not extend retention. Cleanup must never touch commitments, terms, repayments, ledger, audit, or financial state. Future reminder candidates derive from current state and are not lost merely because old notification rows expire.
+
+### O. Core invariant
+
+The scheduler derives eligibility from current authoritative server state at execution time, creates at most one notification for each logical reminder occurrence, and can fail, retry, overlap, or run late without changing financial state or producing duplicates.
+
+## Notification Preferences T0 — APPROVED
+
+### A. Endpoints
+
+`GET /api/v1/notification-preferences` and `POST /api/v1/notification-preferences`. There is no PATCH endpoint in MVP.
+
+### B. Response
+
+The exact object is:
+
+```json
+{
+  "due_reminders_enabled": true,
+  "overdue_reminders_enabled": true
+}
+```
+
+Only these two fields exist in MVP. There is no email, SMS, push, quiet hours, digest, per-commitment preference, global all-notifications-off, or mandatory-workflow control.
+
+### C. Defaults
+
+Defaults are `due_reminders_enabled = true` and `overdue_reminders_enabled = true`. GET with no stored row returns these defaults, remains side-effect free, and does not create a row.
+
+### D. Persistence
+
+Add dedicated `notification_preferences` persistence. Recommended fields are `user_id`, the two booleans, `created_at`, and `updated_at`. `user_id` is the users PK/FK; one row maximum exists per user; booleans are non-null and default true; no JSON settings blob is used. Inspect exact migration details before implementation.
+
+### E. GET semantics
+
+The authenticated current user only, with no query parameters. An existing row returns stored values; no row returns defaults. No user ID appears in the path or body.
+
+### F. POST semantics
+
+The body must contain both required fields:
+
+```json
+{
+  "due_reminders_enabled": true,
+  "overdue_reminders_enabled": true
+}
+```
+
+This is complete replacement of the two-field object and returns the stored authoritative object. There is no partial update.
+
+### G. Upsert
+
+POST is a server-authoritative upsert: insert when absent and update when present. Repeated identical POST is safe. No Idempotency-Key is required because full-object replacement is naturally idempotent.
+
+### H. Validation
+
+Accept strict booleans only. Reject null, strings such as `"true"`, integers such as `1`, and extra fields. Use the existing closed-schema backend validation style.
+
+### I. Authorization
+
+Only the authenticated user may read or write their own preferences. There is no target user_id, actor field, admin override endpoint, or cross-user access. Normal active-account/session rules apply.
+
+### J. Mandatory workflow notifications
+
+Preferences control reminders only. They never suppress mandatory workflow notifications, including commitment proposal/confirmation/rejection, repayment verification request/verified/disputed, extension requested/accepted/rejected, and mutual closure requested/accepted/rejected once implemented.
+
+### K. B11-R mapping
+
+`due_reminders_enabled` controls `UPCOMING_DUE` and `DUE_TODAY`. `overdue_reminders_enabled` controls `OVERDUE`. Nothing else is controlled.
+
+### L. Evaluation timing
+
+Read preferences at reminder execution time. If disabled before candidate generation, skip creation. If later re-enabled, do not backfill stale historical reminders; resume only currently relevant/future behavior.
+
+### M. Concurrency
+
+Concurrent POSTs are safe. Database uniqueness on `user_id` prevents duplicate rows; last committed write wins. No financial/advisory locks are required.
+
+### N. Transaction and financial isolation
+
+Preference writes affect preferences only. They must not alter commitments, repayments, already-delivered notifications, or financial state, and must not create ledger events. No financial audit event is required.
+
+### O. History and retention
+
+There is no immutable preference version history in MVP; `updated_at` is sufficient operational state. Preference rows are account configuration, not ordinary NotificationEvent records, so 90-day notification retention does not apply.
+
+### P. Account deactivation
+
+No special preference deletion behavior is required. Deactivated users follow normal account/session eligibility and stop receiving new ordinary reminder delivery. Broader account-erasure policy is separate.
+
+### Q. Migration
+
+Use one additive Alembic migration for `notification_preferences` during implementation; no destructive migration and no rewriting of existing NotificationEvent rows. B11-R dedupe and preference schemas may be implemented in one later batch if reviewed together, but remain logically distinct concerns.
+
+### R. API errors
+
+Use existing common API error behavior for unauthenticated, validation, and safe server/database errors. Do not invent preference-specific public error codes unless a demonstrated need appears.
+
+### S. Core invariant
+
+Notification Preferences control only optional reminder delivery. They never suppress mandatory workflow notifications and never affect financial state.
+
+## B11-R and Notification Preferences implementation order
+
+1. Approved docs checkpoint.
+2. Read the current merged notification schema/model/API/tests.
+3. Inspect the exact migration head and current notification implementation.
+4. Produce a bounded implementation plan.
+5. Implement additive preference persistence and API.
+6. Implement reminder dedupe persistence.
+7. Implement scheduler/job.
+8. Implement retention cleanup if included in the approved batch.
+9. Focused tests.
+10. Full backend regression.
+11. Final review.
+12. Promote/merge only after review.
+
+No implementation begins before this docs checkpoint is committed.
+
+## B11-R and Notification Preferences stop conditions
+
+Stop before proceeding if implementation requires a destructive migration; a change to financial semantics or commitment/repayment state machines; repayment-to-installment allocation logic; new broker/queue infrastructure; Redis, Celery, Kafka, or RabbitMQ; a new notification channel/provider; push, email, or SMS; auth redesign; a new dependency unless strictly required and approved; API behavior outside these contracts; frontend implementation; or automatic `DEFAULTED` behavior.
