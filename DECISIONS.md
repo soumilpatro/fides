@@ -6958,3 +6958,42 @@ Only commitment participants may access closure requests. Create is either parti
 Use an additive, non-destructive migration after inspecting the post-B11-R migration head. Do not rewrite historical commitment or repayment data. Required validation includes eligibility and role rules, one pending request, note and amount derivation, verified/pending/disputed semantics, IDOR, idempotency, snapshot conflict, repayment/verification/extension races, double and competing transitions, CLOSED-state blocking, ledger events, history, summaries, and no fake repayment. Acceptance must close only when both parties explicitly agree to waive exactly the same server-authoritative verified outstanding amount revalidated atomically.
 
 Implementation flow is: docs checkpoint; read-only audit; inspect migration head, B13 locks/idempotency, accounting and verification; bounded plan; additive persistence/API/service; ledger projection; CLOSED integration; concurrency/idempotency tests; focused and full regression; review; then merge only after approval. Stop if implementation requires changing accounting, representing waiver as repayment, changing B13 lock order, destructive migration, a new dependency or broker, automatic DEFAULTED behavior, unilateral forgiveness, partial custom waiver, frontend work, unrelated API redesign, or custody/payment movement.
+
+### Mutual closure implementation evidence — 2026-10-03
+
+Migration `014` follows `013`, adding the dedicated closure table/status enum,
+non-cascading foreign keys, full-waiver/decision checks, one REQUESTED request
+per commitment, and the history-order index. Downgrade refuses closure rows,
+ledger/audit/notification provenance or closure endpoint idempotency records.
+The six approved routes use strict normalized notes, existing authentication,
+parent participant authorization and endpoint-scoped 30-day idempotency.
+
+Acceptance reuses `repayment_accounting` and `validate_history` under idempotency
+→ sorted Users → Commitment → ClosureRequest locks. Pending verification or an
+exact snapshot mismatch produces CONFLICT without changing the proposal.
+Successful acceptance closes the parent and commits closure, ledger, audit,
+mandatory workflow notification and replay response atomically. Reject/cancel
+preserve stale-request resolution; cancellation has no notification. Ledger
+storage contains references/status only and historical REQUESTED projection
+survives decisions. Notes stay confined to participant closure responses.
+
+CLOSED is excluded from summary outstanding; existing financial mutation
+guards, extension rejection, reminder eligibility, accounting formulas, B13
+behavior, frontend and dependencies are preserved. B14 direct-path admission,
+malformed JSON, correlation and no-store conventions cover closure routes.
+Focused coverage includes 22 PostgreSQL concurrency tests and 27 migration/model
+tests. One focused self-review added a fail-closed check tying an ACCEPTED
+request to the parent's CLOSED state and matching closure timestamp. Runtime
+permissions are documented separately; no role provisioning is executed.
+
+Final validation: 262 focused closure tests passed, including 22 real PostgreSQL
+race tests and 27 migration/model tests. The required relevant regression groups
+passed 1,729 tests; the final full backend run passed 3,024 tests with zero
+failures and zero skips. Ruff and formatter checks passed on all 36 changed/new
+Python files; pip check and git diff --check passed. Repository and isolated
+fides_test Alembic heads are 014. The existing commitment OpenAPI route assertion
+was extended for the approved nested closure routes. An interrupted run's
+identified fixture records were cleaned only from fides_test before the final
+run. The existing Starlette deprecation warning and six import-order findings
+in untouched B12 tests remain non-blocking; one previously affected B12 file
+was necessarily updated for CLOSED exclusion and now passes changed-file checks.

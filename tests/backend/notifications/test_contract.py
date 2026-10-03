@@ -34,6 +34,9 @@ def test_openapi():
         "UPCOMING_DUE",
         "DUE_TODAY",
         "OVERDUE",
+        "MUTUAL_CLOSURE_REQUESTED",
+        "MUTUAL_CLOSURE_ACCEPTED",
+        "MUTUAL_CLOSURE_REJECTED",
     }
     assert any(part.get("type") == "null" for part in row["properties"]["actor"]["anyOf"])
     assert set(schemas["NotificationListResponse"]["properties"]) == {"items", "next_cursor"}

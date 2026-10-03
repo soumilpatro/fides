@@ -20,6 +20,7 @@ from app.models.connection import Connection
 from app.models.extension_request import ExtensionRequest
 from app.models.idempotency_key import IdempotencyKey
 from app.models.ledger_event import LedgerEvent
+from app.models.mutual_closure_request import MutualClosureRequest
 from app.models.notification_event import NotificationEvent
 from app.models.notification_preference import NotificationPreference
 from app.models.repayment import Repayment
@@ -40,6 +41,7 @@ __all__ = [
     "Repayment",
     "RepaymentVerification",
     "ExtensionRequest",
+    "MutualClosureRequest",
     "LedgerEvent",
     "AuditLog",
     "IdempotencyKey",

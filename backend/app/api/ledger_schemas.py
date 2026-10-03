@@ -136,6 +136,50 @@ class ExtensionRejectedEvent(TimelineEvent):
     details: ExtensionRejectedDetails
 
 
+class ClosureDetails(AuthSchema):
+    closure_request_id: UUID
+    currency: Currency
+    outstanding_snapshot_minor: Annotated[int, Field(strict=True, gt=0)]
+    waived_amount_minor: Annotated[int, Field(strict=True, gt=0)]
+
+
+class ClosureRequestedDetails(ClosureDetails):
+    status: Literal["REQUESTED"]
+
+
+class ClosureAcceptedDetails(ClosureDetails):
+    status: Literal["ACCEPTED"]
+    resulting_commitment_status: Literal["CLOSED"]
+
+
+class ClosureRejectedDetails(ClosureDetails):
+    status: Literal["REJECTED"]
+
+
+class ClosureCancelledDetails(ClosureDetails):
+    status: Literal["CANCELLED"]
+
+
+class ClosureRequestedEvent(TimelineEvent):
+    event_type: Literal["MUTUAL_CLOSURE_REQUESTED"]
+    details: ClosureRequestedDetails
+
+
+class ClosureAcceptedEvent(TimelineEvent):
+    event_type: Literal["MUTUAL_CLOSURE_ACCEPTED"]
+    details: ClosureAcceptedDetails
+
+
+class ClosureRejectedEvent(TimelineEvent):
+    event_type: Literal["MUTUAL_CLOSURE_REJECTED"]
+    details: ClosureRejectedDetails
+
+
+class ClosureCancelledEvent(TimelineEvent):
+    event_type: Literal["MUTUAL_CLOSURE_CANCELLED"]
+    details: ClosureCancelledDetails
+
+
 LedgerItem = Annotated[
     ProposedEvent
     | ConfirmedEvent
@@ -146,7 +190,11 @@ LedgerItem = Annotated[
     | DisputedEvent
     | ExtensionRequestedEvent
     | ExtensionAcceptedEvent
-    | ExtensionRejectedEvent,
+    | ExtensionRejectedEvent
+    | ClosureRequestedEvent
+    | ClosureAcceptedEvent
+    | ClosureRejectedEvent
+    | ClosureCancelledEvent,
     Field(discriminator="event_type"),
 ]
 

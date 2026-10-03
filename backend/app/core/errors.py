@@ -248,6 +248,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "/api/v1/commitments",
                 "/api/v1/repayments",
                 "/api/v1/extension-requests",
+                "/api/v1/closure-requests",
                 "/api/v1/notifications",
                 "/api/v1/notification-preferences",
                 "/api/v1/summary",
@@ -260,9 +261,9 @@ def register_exception_handlers(app: FastAPI) -> None:
                 error["loc"] == ("body", "amount_minor") for error in exc.errors()
             ):
                 return await financial_exception_handler(request, FinancialError("INVALID_AMOUNT"))
-            if not request.scope["path"].endswith(("/repayments", "/extension-requests")) and any(
-                error["loc"] == ("body", "principal_amount_minor") for error in exc.errors()
-            ):
+            if not request.scope["path"].endswith(
+                ("/repayments", "/extension-requests", "/closure-requests")
+            ) and any(error["loc"] == ("body", "principal_amount_minor") for error in exc.errors()):
                 return await financial_exception_handler(request, FinancialError("INVALID_AMOUNT"))
         status_code, message = AUTH_ERRORS[code]
         return JSONResponse(

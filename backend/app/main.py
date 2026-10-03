@@ -19,6 +19,7 @@ from fastapi import FastAPI
 
 from app.api.auth import AuthErrorEnvelope, initialize_auth
 from app.api.auth import router as auth_router
+from app.api.closure_requests import router as closure_router
 from app.api.commitments import router as commitments_router
 from app.api.connections import router as connections_router
 from app.api.extensions import router as extensions_router
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
     app.include_router(verification_router)
     app.include_router(ledger_router)
     app.include_router(extensions_router)
+    app.include_router(closure_router)
     app.include_router(notifications_router)
     app.include_router(notification_preferences_router)
     app.include_router(summary_router)

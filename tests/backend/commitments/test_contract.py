@@ -133,6 +133,8 @@ def test_exact_openapi():
         ("GET", "/{id}/ledger"),
         ("GET", "/{id}/extension-requests"),
         ("POST", "/{id}/extension-requests"),
+        ("GET", "/{id}/closure-requests"),
+        ("POST", "/{id}/closure-requests"),
         ("GET", "/{id}/installments"),
         ("GET", "/{id}/repayments"),
         ("POST", "/{id}/repayments"),

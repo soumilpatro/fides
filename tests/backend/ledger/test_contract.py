@@ -18,6 +18,17 @@ EXTENSION_DETAILS = {
     "status",
 }
 DETAILS = {
+    **{
+        f"MUTUAL_CLOSURE_{state}": {
+            "closure_request_id",
+            "status",
+            "currency",
+            "outstanding_snapshot_minor",
+            "waived_amount_minor",
+        }
+        | ({"resulting_commitment_status"} if state == "ACCEPTED" else set())
+        for state in ("REQUESTED", "ACCEPTED", "REJECTED", "CANCELLED")
+    },
     "EXTENSION_REQUESTED": EXTENSION_DETAILS,
     "EXTENSION_REJECTED": EXTENSION_DETAILS,
     "EXTENSION_ACCEPTED": EXTENSION_DETAILS | {"terms_version_id"},

@@ -23,6 +23,7 @@ def test_openapi_closed_variants_errors_and_bearer():
                 "/api/v1/commitments",
                 "/api/v1/repayments",
                 "/api/v1/extension-requests",
+                "/api/v1/closure-requests",
                 "/api/v1/notifications",
                 "/api/v1/notification-preferences",
                 "/api/v1/summary",

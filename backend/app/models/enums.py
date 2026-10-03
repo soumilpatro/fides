@@ -71,6 +71,13 @@ class ExtensionStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class MutualClosureStatus(str, enum.Enum):
+    REQUESTED = "REQUESTED"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+
 class InstallmentStatus(str, enum.Enum):
     PENDING = "PENDING"
     PARTIALLY_PAID = "PARTIALLY_PAID"
@@ -107,3 +114,4 @@ verification_decision_enum = _pg_enum(VerificationDecision, "verification_decisi
 extension_status_enum = _pg_enum(ExtensionStatus, "extension_status")
 installment_status_enum = _pg_enum(InstallmentStatus, "installment_status")
 notification_status_enum = _pg_enum(NotificationStatus, "notification_status")
+mutual_closure_status_enum = _pg_enum(MutualClosureStatus, "mutual_closure_status")
