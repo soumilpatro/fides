@@ -9,7 +9,7 @@ const destinations = [["overview", "Overview"], ["connections", "Connections"], 
 export function ProtectedShell({ children }: { children: ReactNode }) {
   const { state, session } = useAuth(); const router = useRouter(); const path = usePathname();
   useEffect(() => { if (state.status === "anonymous") router.replace("/"); }, [state, router]);
-  if (state.status !== "authenticated") return <main className="auth-page"><LoadingState message="Resolving your session…" /></main>;
+  if (state.status !== "authenticated") return <main className="auth-page"><Brand /><LoadingState message="Resolving your session…" /></main>;
   return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to content</a>
     <aside className="sidebar"><Link href="/app/overview"><Brand /></Link>
       <nav aria-label="Fides">{destinations.map(([route, label]) => <Link key={route} href={`/app/${route}`} aria-current={((route === "overview" && (path.startsWith("/app/commitments") || path.startsWith("/app/repayments"))) || path === `/app/${route}` || path.startsWith(`/app/${route}/`)) ? "page" : undefined}>{label}</Link>)}</nav>
