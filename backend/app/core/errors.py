@@ -249,6 +249,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "/api/v1/repayments",
                 "/api/v1/extension-requests",
                 "/api/v1/notifications",
+                "/api/v1/notification-preferences",
                 "/api/v1/summary",
             )
         ):

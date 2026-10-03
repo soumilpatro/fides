@@ -25,6 +25,7 @@ from app.api.extensions import router as extensions_router
 from app.api.health import router as health_router
 from app.api.ledger import router as ledger_router
 from app.api.me import router as me_router
+from app.api.notification_preferences import router as notification_preferences_router
 from app.api.notifications import router as notifications_router
 from app.api.repayments import router as repayments_router
 from app.api.summary import router as summary_router
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
     app.include_router(ledger_router)
     app.include_router(extensions_router)
     app.include_router(notifications_router)
+    app.include_router(notification_preferences_router)
     app.include_router(summary_router)
 
     return app

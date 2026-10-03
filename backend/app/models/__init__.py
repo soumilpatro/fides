@@ -21,6 +21,7 @@ from app.models.extension_request import ExtensionRequest
 from app.models.idempotency_key import IdempotencyKey
 from app.models.ledger_event import LedgerEvent
 from app.models.notification_event import NotificationEvent
+from app.models.notification_preference import NotificationPreference
 from app.models.repayment import Repayment
 from app.models.repayment_verification import RepaymentVerification
 from app.models.user import User
@@ -43,4 +44,5 @@ __all__ = [
     "AuditLog",
     "IdempotencyKey",
     "NotificationEvent",
+    "NotificationPreference",
 ]

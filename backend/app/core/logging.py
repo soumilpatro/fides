@@ -47,6 +47,7 @@ def set_api_response_headers(headers: MutableHeaders, path: str) -> None:
             "/api/v1/repayments",
             "/api/v1/extension-requests",
             "/api/v1/notifications",
+            "/api/v1/notification-preferences",
             "/api/v1/summary",
         )
     ):

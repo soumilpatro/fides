@@ -101,6 +101,7 @@ def test_seven_endpoint_openapi_and_closed_account_models():
                 "/api/v1/repayments",
                 "/api/v1/extension-requests",
                 "/api/v1/notifications",
+                "/api/v1/notification-preferences",
                 "/api/v1/summary",
             )
         )
