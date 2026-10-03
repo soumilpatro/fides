@@ -9,7 +9,7 @@ export function Welcome() {
   const { state, session } = useAuth();
   const router = useRouter();
   useEffect(() => { if (state.status === "authenticated") router.replace("/app/overview"); }, [state, router]);
-  if (state.status !== "anonymous") return <main className="auth-page"><LoadingState message="Restoring your session…" /></main>;
+  if (state.status !== "anonymous") return <main className="auth-page"><Brand /><LoadingState message="Restoring your session…" /></main>;
   return <main className="auth-page" id="main-content">
     <div className="auth-brand"><Brand /><span className="micro">A SHARED RECORD</span></div>
     <section className="auth-card welcome-card">
