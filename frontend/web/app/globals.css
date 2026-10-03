@@ -480,3 +480,11 @@ main {
 .f6-stack .button,.f6-dialog .button{transition:background-color 160ms,color 160ms}
 .f6-stack .button:hover:not(:disabled),.f6-dialog .button:hover:not(:disabled){filter:brightness(.97)}
 @media(prefers-reduced-motion:reduce){.f6-stack .button,.f6-dialog .button{transition:none}}
+
+.preference-list{display:grid;gap:var(--space-md)}
+.preference-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-lg);min-height:56px;padding:var(--space-md) 0;border-top:1px solid var(--border)}
+.preference-row:first-child{border-top:0}
+.preference-row>span{display:grid;gap:var(--space-xs);min-width:0}
+.preference-row .supporting{display:block;font-weight:400}
+.preference-row input[type="checkbox"]{width:24px;height:24px;flex:0 0 auto;accent-color:var(--signal)}
+@media(max-width:45rem){.preference-row{align-items:flex-start}.preference-row input[type="checkbox"]{margin-top:4px}}
