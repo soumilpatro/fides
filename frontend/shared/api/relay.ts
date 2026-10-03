@@ -40,7 +40,7 @@ export function isAllowedApiQuery(path:string[],query:URLSearchParams){
   for(const [key,value] of query){
    if(query.getAll(key).length!==1)return false;
    if(key==="limit"){if(!/^[0-9]+$/.test(value)||Number(value)<1||Number(value)>100)return false;}
-   else if(key==="cursor"){if(!value.length||value.length>512||/[\\u0000-\\u001f\\u007f]/.test(value))return false;}
+   else if(key==="cursor"){if(!value.length||value.length>512||/[\u0000-\u001f\u007f]/.test(value))return false;}
    else return false;
   }
   return true;
