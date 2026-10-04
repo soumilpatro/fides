@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import { colors, controls, radii, spacing } from "@fides/shared/tokens/index";
 import type { CommitmentRequest, Terms } from "@fides/shared/api/commitments";
 import { formatMoney } from "@fides/shared/domain/money";
@@ -64,7 +64,7 @@ function NewCommitment({ selected, onBack, onDetail, onConnections }: { selected
   const eligible = data.data?.eligible ?? [], connection = eligible.find(row => row.id === (body?.connection_id ?? form.connection));
   const name = connection ? otherParticipant(connection,data.userId)?.display_name ?? "Selected participant" : "Selected participant";
   const set = <K extends keyof ProposalForm>(field: K, value: ProposalForm[K]) => { setForm(previous => ({...previous,[field]:value})); setValidation(null); };
-  return <Screen><Button title="Back to Commitments" variant="quiet" onPress={onBack} /><Title>Create commitment</Title><Feedback error={data.error} busy={data.busy} />
+  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS==="ios"?"padding":undefined}><Screen><Button title="Back to Commitments" variant="quiet" onPress={onBack} /><Title>Create commitment</Title><Feedback error={data.error} busy={data.busy} />
     {validation && <ErrorState message={validation} />}
     {body ? <><Review body={body} name={name} self={state.status === "authenticated" ? state.user.display_name : "You"} />
       {pending && <Body>An earlier attempt may have completed. Refresh before explicitly retrying the same proposal; its key and payload are retained.</Body>}
@@ -92,7 +92,7 @@ function NewCommitment({ selected, onBack, onDetail, onConnections }: { selected
         <TextField label="Grace period (days)" hint="Integer from 0 to 365." keyboardType="number-pad" value={form.grace} onChangeText={value => set("grace",value)} />
         <Button title="Review proposal" disabled={data.busy} onPress={() => {try { setReview(proposalBody(form,eligible.map(row => row.id))); setValidation(null); } catch (error) {setValidation(error instanceof Error ? error.message : "Check the proposal fields.");}}} />
       </View>}
-  </Screen>;
+  </Screen></KeyboardAvoidingView>;
 }
 function TermsView({ terms }: { terms: Terms }) {
   const v = currentTerms(terms);
@@ -126,7 +126,7 @@ function CommitmentDetail({ id, onBack, onReport, onRepayment, onRequest }: { id
   </Screen>;
 }
 const styles = StyleSheet.create({
-  form: {gap:spacing.lg}, choice: {minHeight:controls.button,padding:spacing.md,borderWidth:1,borderColor:colors.border,borderRadius:radii.control},
+  flex: {flex:1}, form: {gap:spacing.lg}, choice: {minHeight:controls.button,padding:spacing.md,borderWidth:1,borderColor:colors.border,borderRadius:radii.control},
   selected: {borderColor:colors.brand.signal}, overlay: {flex:1,backgroundColor:colors.canvas,justifyContent:"center",padding:spacing.lg},
   dialog: {backgroundColor:colors.surface,borderRadius:radii.card,borderWidth:1,borderColor:colors.border,padding:spacing.lg,gap:spacing.lg,width:"100%",maxWidth:640,alignSelf:"center"},
 });
