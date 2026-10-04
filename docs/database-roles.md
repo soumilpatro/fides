@@ -59,11 +59,14 @@ deployment provisioning and verification; see [the B15 runbook](b15-deployment.m
 - Must not own application objects or inherit an owner/migration role that
   bypasses these restrictions. Verify effective grants, schema CREATE denial,
   required schema/type usage, and actual application access under this credential.
-- Must **not** be usable to connect to any database other than the one
-  it is scoped to (the application runtime role for `fides_dev` should
-  not also have access to `fides_test`, and vice versa, keeping the two
-  databases genuinely isolated per the approved B1 test-database
-  decision).
+- Must use a dedicated application database with each service `DATABASE_URL`
+  pinned to its intended database. No explicit cross-database grants, ownership,
+  or role membership may give a runtime role authority over another database.
+  PostgreSQL cannot deny CONNECT per-role while PUBLIC grants it; technical
+  connectivity alone is not proof of application-data access. Keep development,
+  test, staging and production data separate, with no Fides schema/data in other
+  databases on the staging/production cluster. Provider network/auth controls
+  and actual database inventory must be verified before production acceptance.
 
 ### 3. No client-side database credentials
 - Per Tech Spec Sec. 22 and Database Spec Sec. 14: "No client receives
@@ -228,13 +231,34 @@ attributes, membership, ownership, search_path, enums and exactly Alembic head 0
 It reads catalogs and alembic_version, not financial rows; it performs no destructive
 UPDATE/DELETE/TRUNCATE probes. These assertions are prepared, not executed evidence.
 
-PostgreSQL has no per-role DENY overriding PUBLIC CONNECT. The scripts revoke
-PUBLIC CONNECT/TEMPORARY only on the target DB; they do not change unrelated or
-template database ACLs. Bootstrap and verification fail if any runtime role can connect to
-another connectable database (including template databases). A cluster
-administrator must review/isolate those ACLs first. Similarly, unexpected CREATE
-on another schema is refused rather than silently modifying unrelated schemas.
-Host authentication/provider policies still require separate validation.
+PostgreSQL has no per-role DENY overriding PUBLIC CONNECT. The scripts require
+runtime CONNECT to the target Fides database and revoke PUBLIC CONNECT/TEMPORARY
+only on that dedicated target; they never alter unrelated database ACLs. Managed
+provider maintenance/template databases such as `postgres`, `template0` and
+`template1` may remain technically connectable when provider settings and PUBLIC
+privileges permit it. PUBLIC-derived CONNECT/TEMPORARY alone is not a failure.
+
+Bootstrap and verification inspect `pg_database.datdba` and expanded database ACLs
+(`aclexplode`, using `acldefault` when `datacl` is NULL). They fail on runtime
+ownership or any role-specific database privilege on another database, including
+CONNECT, CREATE, TEMPORARY and grant options, regardless of grantor. Grants from
+provider users to Fides runtime roles therefore fail too. Effective CREATE on
+another database is also refused, including CREATE derived from PUBLIC. All
+databases are checked, even those currently disallowing connections; no database
+name is treated as a trusted exception. Existing membership checks reject
+inherited/provider-role and SET ROLE authority rather than relying on NOINHERIT.
+Target database/schema CREATE denials and ledger/audit protections are unchanged.
+Unexpected CREATE on another schema is still refused without changing that schema.
+
+These catalog checks cannot establish what schemas/data or PUBLIC object grants
+exist inside other databases. Fides isolation requires a dedicated application
+database, no Fides schema/data elsewhere, no explicit cross-database grants,
+service `DATABASE_URL` pinning, and provider network/auth controls. Before execution,
+review the actual provider/database inventory and administrator authority. Before
+production acceptance, verify that inventory and each relevant database's schema,
+data and effective application privileges, including PUBLIC grants; document any
+maintenance/template connectivity. A passing script is not proof of network
+isolation or of inaccessible data in another database.
 
 Semantics references:
 
@@ -242,6 +266,8 @@ Semantics references:
 - [PostgreSQL 16 pgcrypto](https://www.postgresql.org/docs/16/pgcrypto.html)
 - [PostgreSQL 16 psql variables](https://www.postgresql.org/docs/16/app-psql.html)
 - [PostgreSQL 16 REVOKE semantics](https://www.postgresql.org/docs/16/sql-revoke.html)
+- [PostgreSQL 16 database catalog](https://www.postgresql.org/docs/16/catalog-pg-database.html)
+- [PostgreSQL 16 ACL inspection](https://www.postgresql.org/docs/16/functions-info.html)
 
 ## Local development privileges (unchanged)
 

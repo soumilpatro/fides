@@ -109,11 +109,17 @@ BEGIN
             AND n.nspname<>'information_schema' AND has_schema_privilege(role_name,n.oid,'CREATE')) THEN
             RAISE EXCEPTION 'Runtime role can create in another schema: %',role_name;
         END IF;
-        -- No DENY ACL exists: PUBLIC CONNECT on OTHER databases cannot be undone
-        -- by revoking from this role. Stop for DBA review; never alter other DBs here.
-        IF EXISTS (SELECT FROM pg_database d WHERE d.datallowconn
-            AND d.datname<>db_name AND has_database_privilege(role_name,d.oid,'CONNECT')) THEN
-            RAISE EXCEPTION 'Cross-database CONNECT requires cluster administrator review: %',role_name;
+        -- No per-role DENY overrides PUBLIC CONNECT/TEMPORARY on other DBs.
+        -- Reject direct grants from ANY grantor, ownership and effective CREATE.
+        -- Membership/SET ROLE is already rejected above. Include non-connectable
+        -- DBs; do not whitelist provider/template names or modify unrelated ACLs.
+        IF EXISTS (SELECT FROM pg_database d JOIN pg_roles r ON r.rolname=role_name
+            WHERE d.datname<>db_name AND (
+                d.datdba=r.oid
+                OR EXISTS (SELECT FROM aclexplode(coalesce(d.datacl,
+                    acldefault('d',d.datdba))) a WHERE a.grantee=r.oid)
+                OR has_database_privilege(role_name,d.oid,'CREATE'))) THEN
+            RAISE EXCEPTION 'Cross-database grant/ownership/CREATE requires administrator review: %',role_name;
         END IF;
         IF EXISTS (SELECT FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema'

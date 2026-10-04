@@ -238,8 +238,16 @@ $infrastructure$;
   BEGIN
       FOREACH role_name IN ARRAY ARRAY['fides_api','fides_reminders',
           'fides_notification_cleanup'] LOOP
-          IF EXISTS (SELECT FROM pg_database d WHERE d.datallowconn
-              AND d.datname<>current_database() AND has_database_privilege(role_name,d.oid,'CONNECT'))
+          -- PUBLIC CONNECT/TEMPORARY on another DB is not a role-specific grant.
+          -- Membership/SET ROLE and runtime ownership are guarded above.
+          -- Inspect every DB, even if connections are currently disabled; never
+          -- modify unrelated ACLs or assume provider/template names are trusted.
+          IF EXISTS (SELECT FROM pg_database d JOIN pg_roles r ON r.rolname=role_name
+              WHERE d.datname<>current_database() AND (
+                  d.datdba=r.oid
+                  OR EXISTS (SELECT FROM aclexplode(coalesce(d.datacl,
+                      acldefault('d',d.datdba))) a WHERE a.grantee=r.oid)
+                  OR has_database_privilege(role_name,d.oid,'CREATE')))
              OR EXISTS (SELECT FROM pg_namespace n WHERE n.nspname NOT LIKE 'pg_%'
               AND n.nspname<>'information_schema' AND has_schema_privilege(role_name,n.oid,'CREATE'))
              OR has_database_privilege(role_name,current_database(),'CREATE,TEMPORARY') THEN
