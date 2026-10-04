@@ -8,6 +8,7 @@ import { canReport, canDecide, labels, semantics, reportBody, decisionBody, deci
 import { statusLabels } from "@fides/shared/commitments/model";
 import { Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, StatusChip, TextField } from "../../components/ui";
 import { useRepayments } from "./useRepayments";
+import { trapConfirmationFocus } from "../f6-dialog";
 function Feedback({error,busy}:{error:string|null;busy:boolean}) { return <>{error && <ErrorState message={error}/>} {busy && <LoadingState message="Loading the authoritative repayment record…"/>}</>; }
 function Facts({row}:{row:Repayment}) { return <><PersonRow name={row.reported_by.display_name} role="Reported by"/><strong className="amount amount--card">{formatMoney(row.amount_minor,row.currency)}</strong><StatusChip label={labels[row.status]} status={semantics[row.status]}/>
   <dl className="commitment-facts"><dt>Payment date</dt><dd>{row.payment_date}</dd><dt>Reported at</dt><dd>{row.reported_at}</dd><dt>Note</dt><dd>{row.note || "No note"}</dd></dl>
@@ -43,8 +44,8 @@ export function ReportRepayment({id}:{id:string}) {
 }
 function Confirmation({action,onCancel,onSubmit}:{action:DecisionAction;onCancel:()=>void;onSubmit:(body:DecisionRequest)=>void}) {
   const dialog=useRef<HTMLDialogElement>(null),[note,setNote]=useState(""),[error,setError]=useState<string|null>(null),copy=decisionCopy(action);
-  useEffect(()=>{dialog.current?.showModal();},[]);
-  return <dialog className="connection-confirm" ref={dialog} aria-labelledby="decision-title" aria-describedby="decision-body" onCancel={onCancel}><h2 id="decision-title">{copy.title}</h2><p id="decision-body">{copy.body}</p><p>{copy.support}</p>
+  useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.showModal();return()=>previous?.focus();},[]);
+  return <dialog tabIndex={-1} className="connection-confirm f6-dialog" ref={dialog} aria-labelledby="decision-title" aria-describedby="decision-body" onKeyDown={trapConfirmationFocus} onCancel={onCancel}><h2 id="decision-title">{copy.title}</h2><p id="decision-body">{copy.body}</p><p>{copy.support}</p>
     <form onSubmit={event=>{event.preventDefault();try{onSubmit(decisionBody(note));}catch(error){setError(error instanceof Error ? error.message : "Check the note.");}}}>
       <label className="field">Note (optional)<textarea value={note} onChange={e=>setNote(e.target.value)} aria-describedby="decision-hint"/><small id="decision-hint">{copy.hint} {Array.from(note.trim()).length}/500</small></label>
       {error && <ErrorState message={error}/>}<div className="button-row"><Button variant="quiet" autoFocus onClick={onCancel}>Go back</Button><Button type="submit" variant={action === "dispute" ? "secondary" : "primary"}>{copy.button}</Button></div></form>
