@@ -7,6 +7,7 @@ import { actionLabel, availableConnectionActions, confirmation, connectionSectio
   relationshipContext, statusLabel, type ConnectionAction } from "@fides/shared/connections/model";
 import { Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, StatusChip, TextField } from "../../components/ui";
 import { useConnections } from "./useConnections";
+import { trapConfirmationFocus } from "../f6-dialog";
 function Feedback({ error, busy }: { error: string | null; busy: boolean }) {
   return <>{error && <ErrorState message={error} />}{busy && <p role="status">Updating from Fides…</p>}</>;
 }
@@ -51,8 +52,8 @@ function Confirm({ action, row, onCancel, onConfirm }: {
   action: ConnectionAction; row: Connection; onCancel: () => void; onConfirm: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null); const copy = confirmation(action, row);
-  useEffect(() => { dialog.current?.showModal(); }, []);
-  return <dialog ref={dialog} className="connection-confirm" aria-labelledby="confirm-title" aria-describedby="confirm-body" onCancel={onCancel}>
+  useEffect(() => { const previous=document.activeElement as HTMLElement|null; dialog.current?.showModal(); return()=>previous?.focus(); }, []);
+  return <dialog tabIndex={-1} ref={dialog} className="connection-confirm f6-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-body" onKeyDown={trapConfirmationFocus} onCancel={onCancel}>
     <h2 id="confirm-title">{copy.title}</h2><p id="confirm-body">{copy.body}</p>
     <div className="button-row"><Button variant="quiet" autoFocus onClick={onCancel}>Cancel</Button>
       <Button variant={action === "accept" ? "primary" : "secondary"} onClick={onConfirm}>{copy.button}</Button></div>
