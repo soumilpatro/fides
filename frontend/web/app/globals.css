@@ -482,3 +482,7 @@ main {
 .preference-row .supporting{display:block;font-weight:400}
 .preference-row input[type="checkbox"]{width:24px;height:24px;flex:0 0 auto;accent-color:var(--signal)}
 @media(max-width:45rem){.preference-row{align-items:flex-start}.preference-row input[type="checkbox"]{margin-top:4px}}
+
+.due-summary-section .card{min-width:0}
+.due-summary-name,.due-summary-amount{max-width:100%;overflow-wrap:anywhere;word-break:normal}
+.due-summary-amount{white-space:normal}
