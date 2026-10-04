@@ -1,3 +1,4 @@
+import { View } from "react-native";
 import type { DueSummaryPage } from "@fides/shared/api/due-summaries";
 import { dueDateLabel, dueInstallmentLabel, dueRoleLabel } from "@fides/shared/dashboard/due-presentation";
 import { Amount, Body, Button, Card, EmptyState, ErrorState, LoadingState, Title } from "../../components/ui";
@@ -10,7 +11,7 @@ function DueSection({title,state,onRetry,onLoadMore,onOpen}:{title:string;state:
  return <><Title>{title}</Title>
   <Button title={"Refresh "+(isUpcoming?"upcoming":"overdue")} variant="quiet" disabled={state.busy} onPress={onRetry}/>
   {state.busy&&!state.data&&<LoadingState message={"Loading "+sectionName+"…"}/>}
-  {state.busy&&state.data&&<Body supporting>Updating {sectionName}…</Body>}
+  {state.busy&&state.data&&<View accessibilityLiveRegion="polite"><Body supporting>Updating {sectionName}…</Body></View>}
   {state.error&&<><ErrorState message={state.error}/><Button title={"Retry "+(isUpcoming?"upcoming":"overdue")} variant="quiet" disabled={state.busy} onPress={onRetry}/></>}
   {state.data?.items.length===0&&<EmptyState title={isUpcoming?"Nothing upcoming":"Nothing overdue"} message={isUpcoming?"No server-reported due items in the next 7 days.":"No server-reported overdue items."}/>}
   {state.data?.items.map(item=><Card key={(item.installment_id??item.commitment_id)+":"+item.due_date} title={item.counterparty.display_name}>
