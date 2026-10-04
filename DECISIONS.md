@@ -7143,3 +7143,93 @@ migration/index, dependency, cryptographic cursor infrastructure, financial
 formula or repayment-allocation change, reminder behavior or B13 lock-order
 change, Commitment.status mutation, automatic DEFAULTED, existing summary
 response change, new public error, frontend change, or unbounded scanning.
+
+## B15-D0 — APPROVED — Staging deployment and release gates
+
+Baseline: `e8babb3629acaa593f7a950a55ffda646d713e3c`. This is a docs-only
+checkpoint; no cloud resources, secrets, deployment, or application changes are
+authorized by this entry. Operational details and the exact environment matrix
+are frozen in [docs/b15-deployment.md](docs/b15-deployment.md).
+
+### Deployment architecture and runtime
+
+Web: Vercel. API and PostgreSQL: Railway. Reminders and notification cleanup:
+separate Railway scheduled services. Mobile: Expo consuming the deployed Railway
+HTTPS API. Web retains its existing same-origin relay; clients receive no DB or
+provider credentials. GitHub is the source of exact approved release artifacts.
+
+Backend root is `backend/`, FastAPI module `app.main:app`. Railway launch command:
+
+```sh
+python -m uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --no-proxy-headers --no-access-log
+```
+
+Hosting must supply PORT and shell expansion; Settings does not start Uvicorn or
+wire its port automatically. Preserve both flags.
+
+### Configuration and database boundary
+
+Staging/production explicitly use APP_ENV=staging/production and OTP_PROVIDER=twilio,
+DATABASE_URL, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, distinct
+TWILIO_VERIFY_SIGNUP_SERVICE_SID/TWILIO_VERIFY_LOGIN_SERVICE_SID, and
+AUTH_RATE_LIMIT_HMAC_SECRET. Web uses NEXT_PUBLIC_API_BASE_URL=/api/v1 and server-only
+FIDES_BACKEND_API_URL; mobile uses EXPO_PUBLIC_API_BASE_URL. Destination API URLs
+are environment-specific HTTPS URLs ending /api/v1. Public bundle configuration
+must contain no secrets. Database URLs, provider secrets and HMAC secrets remain
+restricted and separate between environments; preserve approved auth defaults.
+
+Separate migration, API, reminder and notification-cleanup roles/credentials.
+Alembic runs explicitly and separately from application startup, with migration
+DATABASE_URL in process environment. Current head is 014; migration 001 requires
+pgcrypto. No deployment migration hook currently exists. Runtime has no DDL,
+ownership/inherited migration rights, superuser, CREATEDB, CREATEROLE or BYPASSRLS.
+Ledger_events and audit_logs are SELECT/INSERT only, with UPDATE/DELETE/TRUNCATE
+denied at database privilege level. Provisioning/verification is infrastructure
+work, not an application schema migration. Include notification_preferences
+runtime access and minimum cleanup row-locking privileges in the role review.
+
+### Scheduled services
+
+From backend/, existing one-shot commands are `python -m app.jobs.reminders`
+(hourly) and `python -m app.jobs.notification_cleanup` (daily). UTC scheduling is
+acceptable; reminder eligibility remains contractual borrower-local time.
+Use one configured schedule per job/environment; overlap correctness retains
+existing dedupe/state checks and SKIP LOCKED cleanup. Monitor exits and missed runs.
+Shared Settings currently requires valid provider/HMAC configuration in staging
+jobs despite no provider use. Do not bypass validation or invent a new auth-cleanup
+command; cleanup_auth remains an internal function without a CLI/scheduler.
+
+### Frozen restricted-staging readiness and proxy policy
+
+/health is process liveness. /readiness MUST NOT be used as an HTTP-status-only
+rollout gate: database failure currently returns 200. Staging release checks must
+require successful HTTP AND JSON status=ready/database=reachable; separately verify
+schema head/grants. No readiness code change is approved in B15-D0.
+
+Retain --no-proxy-headers, narrow actual trusted-peer policy, and the existing
+same-origin Vercel relay. Do not broadly trust forwarded headers. Shared
+backend-observed web proxy IP rate-limit budgets are acceptable for restricted
+staging only. Proper proxy identity/client-IP design is REQUIRED BEFORE PROD;
+do not change relay behavior or auth budgets in this checkpoint.
+
+### Security, operations and rollback
+
+The runbook freezes staging/production gates for HTTPS, restrictive CORS,
+actual-byte request-size enforcement, API/web security headers, secrets,
+least-privilege DB roles, migration separation, logging/privacy, backup/restore,
+monitoring/alerts and rollback. Existing safeguards must be verified at deployed
+ingress and under actual service credentials. Web relay header gaps, production
+proxy identity, backup objectives/restore evidence and operational ownership must
+be closed before production. Platform defaults are not evidence of completion.
+
+Prefer compatible application-artifact rollback and forward migration repair.
+Do not automate destructive downgrades/stamping or erase financial history.
+013 refuses populated preferences/keyed-reminder downgrade; 014 refuses closure
+data/provenance loss. Recovery requires review of current guards and a
+data-preserving plan, not automatic downgrade.
+
+Execution order: B15-D0 documentation; R1 PostgreSQL/roles/migrations; R2 API;
+R3 scheduled services; V1 Vercel; M1 mobile staging; E2E release validation;
+PROD promotion gates. This checkpoint does not approve code, models, migrations,
+indexes, dependencies, financial/auth/rate-limit changes, resource creation or
+deployment. Subsequent execution requires its own authorization and stop gates.

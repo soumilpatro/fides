@@ -1,6 +1,22 @@
 # Fides
 
-Placeholder project README. Product and technical requirements will be captured in `PRODUCT_SPEC.md` and `TECH_SPEC.md`.
+Product and technical requirements are in the checked-in Fides specification
+documents, with approved implementation contracts recorded in `DECISIONS.md`.
+
+## B15 deployment and release planning
+
+The approved staging architecture and release gates are in
+[the B15 deployment runbook](docs/b15-deployment.md), under decision B15-D0.
+Web runs on Vercel; the API, PostgreSQL, and separate reminder/notification-cleanup
+scheduled services run on Railway; Expo mobile consumes the deployed API.
+This is a documentation checkpoint, not evidence of deployed infrastructure.
+
+Migrations run separately from application startup using a distinct migration
+credential. The current repository head is `014`. `/health` is process liveness;
+staging release verification must inspect the `/readiness` JSON body because a
+database failure currently still returns HTTP 200. See the runbook for exact
+commands, environment separation, restricted-staging proxy policy, database roles,
+security gates, and data-preserving rollback requirements.
 
 ## Backend runtime (B2 authentication)
 
