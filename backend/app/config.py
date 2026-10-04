@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # .env.example are local-only Docker Compose development values.
     database_url: str = Field(default="", repr=False)
     test_database_url: str = Field(default="", repr=False)
+    database_host: str = ""
+    database_port: int = 5432
+    database_name: str = ""
+    database_user: str = ""
+    database_password: SecretStr = Field(default=SecretStr(""), repr=False)
     database_isolation_level: Literal["READ COMMITTED"] = "READ COMMITTED"
 
     # Disabled is explicit and safe during foundation-only local startup.
@@ -88,6 +93,16 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_auth_configuration(self) -> "Settings":
+        database_components = (
+            self.database_host,
+            self.database_name,
+            self.database_user,
+            self.database_password.get_secret_value(),
+        )
+        if any(database_components) and not all(value.strip() for value in database_components):
+            raise ValueError(
+                "Component database configuration requires host, name, user, and password."
+            )
         if self.auth_access_token_ttl_seconds > self.auth_refresh_session_ttl_seconds:
             raise ValueError("Access lifetime must not exceed the refresh-session lifetime.")
         if not (
