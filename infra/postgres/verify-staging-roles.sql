@@ -129,11 +129,23 @@ BEGIN
                    OR has_any_column_privilege(role_name,c.oid,'SELECT,INSERT,UPDATE,REFERENCES'))) THEN
             RAISE EXCEPTION 'Unexpected table/column authority outside app schema: %',role_name;
         END IF;
-        IF EXISTS (SELECT FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-            WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema'
-              AND c.relkind='S' AND has_sequence_privilege(role_name,c.oid,'USAGE,SELECT,UPDATE')) THEN
-            RAISE EXCEPTION 'No current runtime sequence privilege is required: %',role_name;
-        END IF;
+        -- Guard has_sequence_privilege behind a relkind check inside PL/pgSQL.
+        -- PostgreSQL's planner may reorder boolean predicates, so calling
+        -- has_sequence_privilege() in the WHERE clause can receive a non-sequence
+        -- OID (for example an index) before c.relkind = 'S' is applied.
+        FOR item IN
+            SELECT c.oid, c.relname
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname NOT LIKE 'pg_%'
+              AND n.nspname<>'information_schema'
+              AND c.relkind='S'
+        LOOP
+            IF has_sequence_privilege(role_name,item.oid,'USAGE,SELECT,UPDATE') THEN
+                RAISE EXCEPTION 'No current runtime sequence privilege is required: % %',
+                    role_name,item.relname;
+            END IF;
+        END LOOP;
     END LOOP;
     IF (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
         WHERE n.nspname=schema_name AND c.relkind='r' AND c.relname=ANY(table_names))
