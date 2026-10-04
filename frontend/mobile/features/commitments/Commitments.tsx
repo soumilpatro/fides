@@ -15,6 +15,7 @@ import { DueSummaryOverview } from "../dashboard/DueSummarySections";
 import { MutualClosureSection } from "../mutual-closure/MutualClosure";
 import { RepaymentsSection, ReportRepayment, RepaymentDetail } from "../repayments/Repayments";
 import { useAuth } from "../auth/useAuth";
+import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
 type Destination = {page:"extension";id:string} | { page: "list" } | { page: "new"; connection?: string } | { page: "detail"; id: string } | {page:"report";id:string} | {page:"repayment";id:string;parent:string};
 export function Commitments({ initialConnection, initialCreate=false, initialDetail, onConnections }: { initialConnection?: string; initialCreate?: boolean; initialDetail?:string; onConnections: () => void }) {
   const [destination, setDestination] = useState<Destination>(() => initialDetail ? {page:"detail",id:initialDetail} : initialConnection || initialCreate ? { page: "new", connection: initialConnection } : { page: "list" });
@@ -50,7 +51,7 @@ function Review({ body, name, self }: { body: CommitmentRequest; name: string; s
     <Body>Borrower: {body.actor_role === "BORROWER" ? self : name}</Body><Body>Lender: {body.actor_role === "LENDER" ? self : name}</Body>
     <Body>Type: {body.type === "IOU" ? "IOU" : "Peer loan"}</Body><Body>Principal: {formatMoney(body.principal_amount_minor,body.currency)}</Body>
     <Body>Description: {body.description || "No description"}</Body>
-    <Body>Schedule: {body.terms.installment_dates ? body.terms.installment_dates.join(", ") : body.terms.due_date ? "Due " + body.terms.due_date : "No deadline"}</Body>
+    <Body>Schedule: {body.terms.installment_dates ? body.terms.installment_dates.map(dateOnlyLabel).join(", ") : body.terms.due_date ? "Due " + dateOnlyLabel(body.terms.due_date) : "No deadline"}</Body>
     <Body>Interest: {body.terms.interest_type === "NONE" ? "No interest" : "Simple fixed: " + percentText(body.terms.interest_rate_bps!)}</Body>
     <Body>Grace period: {body.terms.grace_period_days} days</Body>
     <Body supporting>Fides records the commitment. Money moves outside Fides. Interest totals and installment amounts come from the server after creation.</Body>
@@ -96,7 +97,7 @@ function NewCommitment({ selected, onBack, onDetail, onConnections }: { selected
 }
 function TermsView({ terms }: { terms: Terms }) {
   const v = currentTerms(terms);
-  return <Card title="Current terms"><Body>{scheduleText(v)}</Body>{v.installment_dates?.map(date => <Body key={date}>{date}</Body>)}
+  return <Card title="Current terms"><Body>{scheduleText(v)}</Body>{v.installment_dates?.map(date => <Body key={date}>{dateOnlyLabel(date)}</Body>)}
     <Body>Interest: {v.interest_type === "NONE" ? "No interest" : "Simple fixed: " + percentText(v.interest_rate_bps!)}</Body>
     <Body>Grace period: {v.grace_period_days} days</Body><Body>Due timezone: {v.due_timezone ?? "Timezone not recorded for these legacy terms."}</Body><Body supporting>Version: {v.version_no}</Body></Card>;
 }
@@ -112,7 +113,7 @@ function CommitmentDetail({ id, onBack, onReport, onRepayment, onRequest }: { id
       <Body>{row.type === "IOU" ? "IOU" : "Peer loan"}</Body><Body>{row.description || "No description"}</Body><Body supporting>Fides records the commitment. Money moves outside Fides.</Body></Card>
       {data.data?.terms && <TermsView terms={data.data.terms} />}
       {data.data?.installments && <Card title="Installment schedule">{data.data.installments.map(item => <View key={item.id} style={styles.form}>
-        <Body>Installment {item.sequence_no} · {item.due_date}</Body><StatusChip label={item.status.replaceAll("_"," ")} />
+        <Body>Installment {item.sequence_no} · {dateOnlyLabel(item.due_date)}</Body><StatusChip label={item.status.replaceAll("_"," ")} />
         <Body>Principal: {formatMoney(item.principal_amount_minor,item.currency)}</Body><Body>Interest: {formatMoney(item.interest_amount_minor,item.currency)}</Body><Body>Total due: {formatMoney(item.total_due_minor,item.currency)}</Body>
       </View>)}</Card>}
       <ExtensionsSection id={row.id} onRequest={onRequest} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><RepaymentsSection id={row.id} onReport={onReport} onDetail={onRepayment}/><MutualClosureSection id={row.id} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><History key={row.id+":"+revision} id={row.id} onRepayment={onRepayment}/>
