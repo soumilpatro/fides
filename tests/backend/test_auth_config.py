@@ -154,3 +154,21 @@ def test_environment_normalizes_and_database_credentials_are_not_in_repr():
     )
     assert settings.app_env == "test"
     assert "private-db-password" not in repr(settings)
+
+
+def test_component_database_configuration_requires_complete_secret_set():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, database_host="postgres.railway.internal")
+
+    settings = Settings(
+        _env_file=None,
+        database_host="postgres.railway.internal",
+        database_port=5432,
+        database_name="railway",
+        database_user="fides_api",
+        database_password="p@ss:/?#[]value",
+    )
+    assert settings.database_host == "postgres.railway.internal"
+    assert settings.database_name == "railway"
+    assert "p@ss:/?#[]value" not in repr(settings)
+    assert "p@ss:/?#[]value" not in settings.model_dump_json()
