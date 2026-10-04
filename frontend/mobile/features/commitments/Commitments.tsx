@@ -2,7 +2,6 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import { colors, controls, radii, spacing } from "@fides/shared/tokens/index";
 import type { CommitmentRequest, Terms } from "@fides/shared/api/commitments";
-import { formatMoney } from "@fides/shared/domain/money";
 import { initialForm, proposalBody, type ProposalForm } from "@fides/shared/commitments/form";
 import { percentText } from "@fides/shared/commitments/money";
 import { commitmentRole, counterparty, currentTerms, proposalActions, proposalContext, proposalConfirmation, scheduleText, statusLabels, type ProposalAction } from "@fides/shared/commitments/model";
