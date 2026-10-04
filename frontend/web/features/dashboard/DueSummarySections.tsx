@@ -11,7 +11,7 @@ export interface DueSectionState { data:DueSummaryPage|null; busy:boolean; error
 function DueSection({title,state,onRetry,onLoadMore}:{title:string;state:DueSectionState;onRetry:()=>void;onLoadMore:()=>void}){
  const isUpcoming=title.startsWith("Upcoming"),sectionName=isUpcoming?"upcoming due items":"overdue items";
  return <section className="f6-stack due-summary-section" aria-label={title}><h2>{title}</h2>
-  <Button variant="quiet" disabled={state.busy} onClick={onRetry}>Refresh {isUpcoming?"upcoming":"overdue"}</Button>
+  {state.data&&!state.error&&<Button variant="quiet" disabled={state.busy} onClick={onRetry}>Refresh {isUpcoming?"upcoming":"overdue"}</Button>}
   {state.busy&&!state.data&&<LoadingState message={"Loading "+sectionName+"…"}/>}
   {state.busy&&state.data&&<p role="status" className="supporting">Updating {sectionName}…</p>}
   {state.error&&<><ErrorState message={state.error}/><Button variant="quiet" disabled={state.busy} onClick={onRetry}>Retry {isUpcoming?"upcoming":"overdue"}</Button></>}
@@ -21,7 +21,7 @@ function DueSection({title,state,onRetry,onLoadMore}:{title:string;state:DueSect
    <p className="supporting">Verified outstanding</p><strong className="amount amount--row due-summary-amount">{formatMoney(item.verified_outstanding_minor,item.currency)}</strong>
    <p>Due {dueDateLabel(item.due_date)}</p>
    <p className="supporting">Due timezone: {item.due_timezone}</p>
-   <Link className="button button--quiet" href={"/app/commitments/"+item.commitment_id}>View commitment</Link>
+   <Link className="button button--quiet" aria-label={"View commitment with "+item.counterparty.display_name} href={"/app/commitments/"+item.commitment_id}>View commitment</Link>
   </Card>)}
   {state.data?.next_cursor&&<Button variant="secondary" disabled={state.busy} onClick={onLoadMore}>Load more {isUpcoming?"upcoming":"overdue"}</Button>}
  </section>;
