@@ -19,7 +19,7 @@ export function History({id,onRepayment}:{id:string;onRepayment:(id:string)=>voi
  {data.data?.items.length===0&&<Body>No history available yet.</Body>}
  {data.data?.items.map(event=><Card key={event.id} title={event.actor.display_name}><Body>{historyText(event)}</Body><Body supporting>{new Date(event.occurred_at).toLocaleString()}</Body>
  {"repayment_id" in event.details&&<><StatusChip label={event.details.status==="PENDING_VERIFICATION"?"Pending verification":event.details.status==="VERIFIED"?"Verified":"Disputed"} status={event.details.status==="PENDING_VERIFICATION"?"PENDING":event.details.status==="VERIFIED"?"VERIFIED":"DISPUTED"}/><Button title="View repayment" variant="quiet" onPress={()=>{if("repayment_id" in event.details)onRepayment(event.details.repayment_id);}}/></>}
- {event.event_type==="REPAYMENT_VERIFIED"&&<Body>Verified outstanding after this event</Body><Amount minor={event.details.resulting_verified_outstanding_minor} currency={event.details.currency} size="row"/>}</Card>)}
+ {event.event_type==="REPAYMENT_VERIFIED"&&<><Body>Verified outstanding after this event</Body><Amount minor={event.details.resulting_verified_outstanding_minor} currency={event.details.currency} size="row"/></>}</Card>)}
  {data.data?.next_cursor&&<Button title="Load more history" disabled={data.busy} onPress={()=>void data.loadMore()}/>}</>;
 }
 export function Activity({onCreate}:{onCreate:()=>void}){
