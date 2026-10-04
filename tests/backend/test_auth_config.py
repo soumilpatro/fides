@@ -99,8 +99,28 @@ def test_distinct_services_required_and_secrets_redacted():
     assert "test-only" not in repr(settings)
     assert "test-only" not in settings.model_dump_json()
     with pytest.raises(ValidationError) as exc:
-        Settings(_env_file=None, **twilio_settings(twilio_verify_login_service_sid="VA" + "2" * 32))
+        Settings(
+            _env_file=None,
+            **twilio_settings(
+                app_env="production",
+                twilio_verify_login_service_sid="VA" + "2" * 32,
+            ),
+        )
     assert "test-only" not in str(exc.value)
+
+
+def test_staging_allows_shared_twilio_trial_service():
+    shared_sid = "VA" + "2" * 32
+    settings = Settings(
+        _env_file=None,
+        **twilio_settings(
+            app_env="staging",
+            twilio_verify_signup_service_sid=shared_sid,
+            twilio_verify_login_service_sid=shared_sid,
+        ),
+    )
+    assert settings.twilio_verify_signup_service_sid == shared_sid
+    assert settings.twilio_verify_login_service_sid == shared_sid
 
 
 @pytest.mark.parametrize("provider", ["disabled", "fake"])
