@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, View } from "react-native";
 import { colors, radii, spacing } from "@fides/shared/tokens/index";
 import type { Repayment, RepaymentRequest, DecisionRequest } from "@fides/shared/api/repayments";
 import { formatMoney } from "@fides/shared/domain/money";
@@ -39,10 +39,10 @@ export function ReportRepayment({id,onBack,onDetail}:{id:string;onBack:()=>void;
 }
 function Confirmation({action,onCancel,onSubmit}:{action:DecisionAction;onCancel:()=>void;onSubmit:(body:DecisionRequest)=>void}) {
  const [note,setNote]=useState(""),[error,setError]=useState<string|null>(null),copy=decisionCopy(action);
- return <Modal transparent visible animationType="fade" onRequestClose={onCancel}><KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS==="ios"?"padding":undefined}><View accessibilityViewIsModal style={styles.dialog}><Title>{copy.title}</Title><Body>{copy.body}</Body><Body supporting>{copy.support}</Body>
+ return <Modal transparent visible animationType="fade" onRequestClose={onCancel}><KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS==="ios"?"padding":undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.dialogScroll}><View accessibilityViewIsModal style={styles.dialog}><Title>{copy.title}</Title><Body>{copy.body}</Body><Body supporting>{copy.support}</Body>
    <TextField label="Note (optional)" multiline value={note} hint={copy.hint+" "+Array.from(note.trim()).length+"/500"} onChangeText={setNote}/>{error && <ErrorState message={error}/>}
    <Button title="Go back" variant="quiet" onPress={onCancel}/><Button title={copy.button} variant={action === "dispute" ? "secondary" : "primary"} onPress={()=>{try{onSubmit(decisionBody(note));}catch(error){setError(error instanceof Error ? error.message : "Check the note.");}}}/>
- </View></KeyboardAvoidingView></Modal>;
+ </View></ScrollView></KeyboardAvoidingView></Modal>;
 }
 export function RepaymentDetail({id,onBack}:{id:string;onBack:()=>void}) {
  const data=useRepayments(undefined,id),[confirmation,setConfirmation]=useState<DecisionAction|null>(null),row=data.data?.detail,parent=data.data?.parent;
@@ -58,4 +58,4 @@ export function RepaymentDetail({id,onBack}:{id:string;onBack:()=>void}) {
    </>}
  </Screen>;
 }
-const styles=StyleSheet.create({flex:{flex:1},stack:{gap:spacing.lg},overlay:{flex:1,backgroundColor:colors.canvas,justifyContent:"center",padding:spacing.lg},dialog:{backgroundColor:colors.surface,borderRadius:radii.card,borderWidth:1,borderColor:colors.border,padding:spacing.lg,gap:spacing.lg,width:"100%",maxWidth:640,alignSelf:"center"}});
+const styles=StyleSheet.create({flex:{flex:1},dialogScroll:{flexGrow:1,justifyContent:"center"},stack:{gap:spacing.lg},overlay:{flex:1,backgroundColor:colors.canvas,justifyContent:"center",padding:spacing.lg},dialog:{backgroundColor:colors.surface,borderRadius:radii.card,borderWidth:1,borderColor:colors.border,padding:spacing.lg,gap:spacing.lg,width:"100%",maxWidth:640,alignSelf:"center"}});
