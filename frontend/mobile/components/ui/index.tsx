@@ -40,6 +40,13 @@ export function Title({ children }: { children: ReactNode }) {
     </Text>
   );
 }
+export function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <Text accessibilityRole="header" style={styles.section}>
+      {children}
+    </Text>
+  );
+}
 export function Micro({ children }: { children: ReactNode }) {
   return <Text style={styles.micro}>{children}</Text>;
 }
