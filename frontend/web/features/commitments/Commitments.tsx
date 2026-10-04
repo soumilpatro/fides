@@ -15,6 +15,7 @@ import { History } from "../dashboard/Dashboard";
 import { RepaymentsSection } from "../repayments/Repayments";
 import { MutualClosureSection } from "../mutual-closure/MutualClosure";
 import { useAuth } from "../auth/useAuth";
+import { trapConfirmationFocus } from "../f6-dialog";
 function Feedback({ error, busy }: { error: string | null; busy: boolean }) {
   return <>{error && <ErrorState message={error} />}{busy && <LoadingState message="Loading the authoritative record…" />}</>;
 }
@@ -95,8 +96,8 @@ function TermsView({ terms }: { terms: Terms }) {
 }
 function Confirm({ action, name, onCancel, onConfirm }: { action: ProposalAction; name: string; onCancel: () => void; onConfirm: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null), copy = proposalConfirmation(action,name);
-  useEffect(() => { dialog.current?.showModal(); }, []);
-  return <dialog className="connection-confirm" ref={dialog} aria-labelledby="proposal-confirm-title" aria-describedby="proposal-confirm-body" onCancel={onCancel}>
+  useEffect(() => { const previous=document.activeElement as HTMLElement|null; dialog.current?.showModal(); return()=>previous?.focus(); }, []);
+  return <dialog tabIndex={-1} className="connection-confirm f6-dialog" ref={dialog} aria-labelledby="proposal-confirm-title" aria-describedby="proposal-confirm-body" onKeyDown={trapConfirmationFocus} onCancel={onCancel}>
     <h2 id="proposal-confirm-title">{copy.title}</h2><p id="proposal-confirm-body">{copy.body}</p><div className="button-row"><Button variant="quiet" autoFocus onClick={onCancel}>Go back</Button><Button onClick={onConfirm}>{copy.button}</Button></div></dialog>;
 }
 export function CommitmentDetail({ id }: { id: string }) {
