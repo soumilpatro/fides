@@ -17,7 +17,7 @@ export function RepaymentsSection({id,onReport,onDetail}:{id:string;onReport:()=
  return <View style={styles.stack}><Title>Repayments</Title><Feedback error={data.error} busy={data.busy}/><Button title="Refresh repayments" variant="quiet" disabled={data.busy} onPress={()=>void data.refresh()}/>
    {data.fresh && data.data && canReport(data.data.parent,data.userId) && <Button title="Report repayment" onPress={onReport}/>}
    {data.data?.rows.length===0 && <EmptyState title="No repayments reported" message="Reported repayments will appear here as separate records."/>}
-   {data.data?.rows.map(row=><Card key={row.id}><Facts row={row}/><Button title={"View repayment reported by "+row.reported_by.display_name+" · "+formatMoney(row.amount_minor,row.currency)+" · "+row.payment_date} variant="quiet" onPress={()=>onDetail(row.id)}/></Card>)}
+   {data.data?.rows.map(row=><Card key={row.id}><Facts row={row}/><Button title={"View repayment reported by "+row.reported_by.display_name+" · "+formatMoney(row.amount_minor,row.currency)+" · "+dateOnlyLabel(row.payment_date)} variant="quiet" onPress={()=>onDetail(row.id)}/></Card>)}
  </View>;
 }
 export function ReportRepayment({id,onBack,onDetail}:{id:string;onBack:()=>void;onDetail:(id:string)=>void}) {
