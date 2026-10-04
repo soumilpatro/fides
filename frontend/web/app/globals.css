@@ -172,6 +172,7 @@ main {
   gap: var(--space-lg);
 }
 .card {
+  min-width: 0;
   height: 100%;
   padding: var(--space-xl);
   border: 1px solid var(--border);
@@ -183,6 +184,8 @@ main {
 }
 .amount {
   display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: -0.035em;
@@ -263,6 +266,13 @@ main {
   margin-block: var(--space-lg) var(--space-md);
 }
 .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
   min-height: var(--control-height);
   padding: var(--space-compact) var(--space-md);
   border-radius: var(--radius-control);
