@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from "react-native";
 import { colors, radii, spacing } from "@fides/shared/tokens/index";
 import type { Repayment, RepaymentRequest, DecisionRequest } from "@fides/shared/api/repayments";
 import { formatMoney } from "@fides/shared/domain/money";
@@ -22,7 +22,7 @@ export function RepaymentsSection({id,onReport,onDetail}:{id:string;onReport:()=
 export function ReportRepayment({id,onBack,onDetail}:{id:string;onBack:()=>void;onDetail:(id:string)=>void}) {
  const data=useRepayments(id),[form,setForm]=useState({amount:"",date:"",note:""}),[review,setReview]=useState<RepaymentRequest|null>(null),[validation,setValidation]=useState<string|null>(null);
  const pending=data.pending("report"),body=pending ? JSON.parse(pending.payload) as RepaymentRequest : review,parent=data.data?.parent,eligible=!!parent && data.fresh && canReport(parent,data.userId);
- return <Screen><Button title="Back to commitment" variant="quiet" onPress={onBack}/><Title>Report repayment</Title><Feedback error={data.error} busy={data.busy}/>{validation && <ErrorState message={validation}/>}
+ return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS==="ios"?"padding":undefined}><Screen><Button title="Back to commitment" variant="quiet" onPress={onBack}/><Title>Report repayment</Title><Feedback error={data.error} busy={data.busy}/>{validation && <ErrorState message={validation}/>}
    <Button title="Refresh record" variant="quiet" disabled={data.busy} onPress={()=>void data.refresh()}/>{parent && <Body>Commitment currency: {parent.currency} · {statusLabels[parent.status]}</Body>}
    {parent && data.fresh && !canReport(parent,data.userId) && <ErrorState message="This commitment does not currently allow repayment reporting."/>}
    {body ? <><Card title="Review repayment"><Body>{formatMoney(body.amount_minor,body.currency)}</Body><Body>Payment date: {body.payment_date}</Body><Body>Note: {body.note || "No note"}</Body><Body>You are reporting this repayment.</Body><Body>It will remain pending until the other participant verifies or disputes it.</Body><Body supporting>Fides records this repayment. Money moves outside Fides.</Body></Card>
@@ -34,7 +34,7 @@ export function ReportRepayment({id,onBack,onDetail}:{id:string;onBack:()=>void;
      <TextField label="Note (optional)" editable={!data.busy && eligible} multiline value={form.note} hint={Array.from(form.note.trim()).length+"/500 characters after trimming"} onChangeText={note=>setForm({...form,note})}/>
      <Button title="Review repayment" disabled={data.busy || !eligible} onPress={()=>{try{setReview(reportBody(form,parent));setValidation(null);}catch(error){setValidation(error instanceof Error ? error.message : "Check the report fields.");}}}/>
    </View>}
- </Screen>;
+ </Screen></KeyboardAvoidingView>;
 }
 function Confirmation({action,onCancel,onSubmit}:{action:DecisionAction;onCancel:()=>void;onSubmit:(body:DecisionRequest)=>void}) {
  const [note,setNote]=useState(""),[error,setError]=useState<string|null>(null),copy=decisionCopy(action);
@@ -57,4 +57,4 @@ export function RepaymentDetail({id,onBack}:{id:string;onBack:()=>void}) {
    </>}
  </Screen>;
 }
-const styles=StyleSheet.create({stack:{gap:spacing.lg},overlay:{flex:1,backgroundColor:colors.canvas,justifyContent:"center",padding:spacing.lg},dialog:{backgroundColor:colors.surface,borderRadius:radii.card,borderWidth:1,borderColor:colors.border,padding:spacing.lg,gap:spacing.lg,width:"100%",maxWidth:640,alignSelf:"center"}});
+const styles=StyleSheet.create({flex:{flex:1},stack:{gap:spacing.lg},overlay:{flex:1,backgroundColor:colors.canvas,justifyContent:"center",padding:spacing.lg},dialog:{backgroundColor:colors.surface,borderRadius:radii.card,borderWidth:1,borderColor:colors.border,padding:spacing.lg,gap:spacing.lg,width:"100%",maxWidth:640,alignSelf:"center"}});
