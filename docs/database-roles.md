@@ -2,10 +2,10 @@
 
 **Status:** Documentation / runbook only. This document describes the
 roles and grants FIDES production/staging PostgreSQL databases must
-have. It contains **no SQL to run** and is **not** executed by any
-Alembic migration. Role provisioning is a separate, deliberately
-un-automated concern from ordinary application schema migrations
-(approved B1 decision).
+have. The B15-R1 preparation scripts are in `infra/postgres/` and have **not been
+executed** by this checkpoint. Provisioning remains an explicit administrator
+operation, separate from Alembic migrations (approved B1 decision); no deployment
+hook automatically executes these scripts.
 
 ## Why this is separate from Alembic migrations
 
@@ -38,10 +38,13 @@ deployment provisioning and verification; see [the B15 runbook](b15-deployment.m
 - Must **not** have DDL privileges (no `CREATE`, `ALTER`, `DROP` on any
   object).
 - Must have `SELECT`, `INSERT`, `UPDATE` on ordinary domain tables
-  (`users`, `connections`, `commitments`, `commitment_terms_versions`,
-  `commitment_installments`, `repayments`, `repayment_verifications`,
+  (`users`, `connections`, `commitments`, `repayments`,
   `extension_requests`, `idempotency_keys`, `notification_events`,
   `notification_preferences`).
+- Must have SELECT/INSERT only on `commitment_terms_versions`,
+  `commitment_installments`, and `repayment_verifications`; the B15-R1 scripts
+  deliberately omit UPDATE on these three tables. Authorization locks their
+  mutable parent/repayment, not those immutable child/history rows.
 - Must have `SELECT`, `INSERT` **only** — explicitly **no `UPDATE` or
   `DELETE` or `TRUNCATE`** — on the two append-only tables:
   - `ledger_events`
@@ -68,19 +71,15 @@ deployment provisioning and verification; see [the B15 runbook](b15-deployment.m
   FastAPI backend over HTTPS/REST; they never receive a database
   connection string, role, or credential of any kind.
 
-## What this document deliberately does NOT include
+## Provisioning boundary
 
-- Actual `CREATE ROLE` / `GRANT` / `REVOKE` SQL statements.
-- Any provisioning script, Terraform/IaC config, or Alembic migration
-  that creates or alters roles.
-- Secrets, passwords, or connection strings of any kind.
+This document contains no real secrets, passwords, or connection strings.
+`infra/postgres/provision-staging-roles.sql` and `verify-staging-roles.sql` implement
+the reviewed staging ACL preparation outside the Alembic chain. They do not create
+cloud resources, change application behavior, or run during application startup.
 
-These are intentionally left for a dedicated security/infrastructure
-task (see AI Development & Backend Build Specification B14: Security
-hardening, and B15: Integration & release), where the actual mechanism
-(manual DBA setup, an infra-as-code tool, or a separate provisioning
-script outside the application's own migration chain) can be decided
-deliberately rather than folded into ordinary schema migrations.
+Actual execution, credentials, provider administrator capabilities, and deployed
+privilege evidence remain a separately authorized B15 infrastructure step.
 
 ## B2 authentication runtime and maintenance permissions
 
@@ -141,7 +140,110 @@ BYPASSRLS, DDL, and inherited object ownership. Prove ledger/audit UPDATE, DELET
 and TRUNCATE denial under actual deployed service credentials. No grants are
 executed by this document.
 
-## Local development privileges
+## B15-R1 script operation and caveats
+
+Required client/server: psql 16+ and PostgreSQL 16+. Use a fresh psql session with
+`-X` and an authorized provisioning administrator, not a service login. The
+administrator must be allowed to create roles, manage target DB/schema/object
+ACLs, and set the logging controls below. No Railway connection or SQL execution
+occurred during this preparation.
+
+Required non-secret psql variables are `FidesDatabase`, `FidesSchema`, and
+`FidesPhase` (`bootstrap` or `grants`). Connect to exactly FidesDatabase; the scripts
+never connect to a database on the operator's behalf. FidesSchema can be parameterized:
+per-database role search_path is set deliberately so existing unqualified Alembic
+and ORM statements resolve to that schema. Dedicated staging only: PUBLIC ACL
+changes must not be applied to a shared application/database schema.
+
+Execution order, after separate authorization:
+
+1. `provision-staging-roles.sql` with FidesPhase=bootstrap on an empty app schema.
+2. Existing Alembic upgrade through 014, connecting as `fides_migrator`.
+3. The same provisioning script with FidesPhase=grants; it includes verification
+   before COMMIT and rolls back privilege changes on any assertion failure.
+4. Standalone `verify-staging-roles.sql` with FidesDatabase/FidesSchema in a read-only
+   transaction, then separately approved real-credential connection/smoke checks.
+5. Enable API/jobs only after verification. Bootstrap is not runtime readiness.
+
+Bootstrap requires all four nonblank psql password variables:
+`FidesMigratorPassword`, `FidesApiPassword`, `FidesRemindersPassword`, and
+`FidesNotificationCleanupPassword`. Supply through protected input or private psql
+prompts, never shell `-v Password=...` arguments/history. No passwords are supplied
+or generated here. Passwords are used only for newly created roles; existing role
+passwords are never changed. Unknown attributes/ownership/membership fail for
+explicit review. Only per-database search_path is deliberately ALTERed; cross-role
+memberships among the four approved names are explicitly revoked, without blindly
+dropping roles or reassigning owned data. New credentials use SCRAM-SHA-256.
+
+Before password interpolation the script disables psql echo/hidden query echo,
+uses terse errors and transaction-local standard SQL/error/duration sampling logs.
+It aborts if the administrator cannot set these controls. Provider audit extensions,
+proxy/query capture, client tracing/history and other external logging must also be
+reviewed: session settings cannot guarantee their secrecy. Do not run it until
+those channels are confirmed safe. The grant phase needs no password variables.
+
+Migration `001` requires pgcrypto. PostgreSQL documents it as trusted, installable
+by a non-superuser with database CREATE; the migrator receives CONNECT/CREATE on
+the target DB and USAGE/CREATE on the schema, not CREATEDB or superuser. Verify the
+provider exposes trusted pgcrypto before execution; availability is checked by
+catalog, not by silently attempting an extension workaround. Migration-owned tables
+and enums must belong to the migrator. Extension objects may be bootstrap-superuser
+owned: the provisioner needs authority to revoke their EXECUTE ACLs if installed
+in the app schema. Runtime access to application-schema pgcrypto routines is limited
+to the API's UUID default; the migrator can also execute that UUID function for
+schema maintenance. pg_catalog builtins remain unchanged.
+
+API operation matrix: SELECT/INSERT/UPDATE on users, connections, commitments,
+repayments, extension_requests, idempotency_keys, notification_events,
+notification_preferences, mutual_closure_requests and the three auth operational
+tables. SELECT/INSERT only on auth_identities, terms versions, installments,
+verification history, ledger_events and audit_logs. No API DELETE/TRUNCATE,
+REFERENCES/TRIGGER, or access to alembic_version. No service owns objects or has
+membership/SET ROLE authority. No future blanket grants or grant options.
+
+The reminder role has table SELECT only on commitments and terms versions (both
+are projected as full row JSON). Other SELECT grants are column-scoped: users
+(id, status); installments (id, commitment_id, terms_version_id, due_date,
+sequence_no); repayments (commitment_id, status, amount_minor, currency,
+reported_by_user_id); preferences (user_id, due_reminders_enabled,
+overdue_reminders_enabled); notifications (id for RETURNING). It has INSERT only
+on notifications, and cannot read users' phones/profile fields or auth data. Cleanup
+has SELECT(id, created_at), DELETE, and UPDATE(id) only on notification_events.
+PostgreSQL's FOR UPDATE rule requires UPDATE on at least one column; this is why
+cleanup receives UPDATE(id). This also permits actual id updates: it is not a
+special lock-only privilege. It does not grant table-wide UPDATE or financial
+mutation. Restrict the credential to the existing one-shot cleanup job.
+
+All current keys use UUID, user_id, or composite keys: migrations 001-014 create
+no sequences, so no sequence privileges are needed/granted. API receives USAGE on
+the eleven enums; reminders on the seven types used by its input/output tables;
+cleanup needs none for its id/created_at query. Table SELECT/INSERT only does not
+require REFERENCES for existing FK checks. UUID generation uses existing functions.
+
+No ALTER DEFAULT PRIVILEGES is installed. Existing custom migrator default ACLs
+are refused. Every schema change must explicitly refresh the inventory/grants and
+verification; unexpected tables/views/sequences/enums/routines fail closed. The
+verification checks effective table AND column privileges, grant-option denial,
+attributes, membership, ownership, search_path, enums and exactly Alembic head 014.
+It reads catalogs and alembic_version, not financial rows; it performs no destructive
+UPDATE/DELETE/TRUNCATE probes. These assertions are prepared, not executed evidence.
+
+PostgreSQL has no per-role DENY overriding PUBLIC CONNECT. The scripts revoke
+PUBLIC CONNECT/TEMPORARY only on the target DB; they do not change unrelated or
+template database ACLs. Bootstrap and verification fail if any runtime role can connect to
+another connectable database (including template databases). A cluster
+administrator must review/isolate those ACLs first. Similarly, unexpected CREATE
+on another schema is refused rather than silently modifying unrelated schemas.
+Host authentication/provider policies still require separate validation.
+
+Semantics references:
+
+- [PostgreSQL 16 privileges](https://www.postgresql.org/docs/16/ddl-priv.html)
+- [PostgreSQL 16 pgcrypto](https://www.postgresql.org/docs/16/pgcrypto.html)
+- [PostgreSQL 16 psql variables](https://www.postgresql.org/docs/16/app-psql.html)
+- [PostgreSQL 16 REVOKE semantics](https://www.postgresql.org/docs/16/sql-revoke.html)
+
+## Local development privileges (unchanged)
 
 The Docker Compose setup in `docker-compose.yml` (B1) uses a single,
 broadly-privileged `fides` role for local development convenience only,
