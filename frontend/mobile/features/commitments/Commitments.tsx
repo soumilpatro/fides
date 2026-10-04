@@ -105,7 +105,7 @@ function CommitmentDetail({ id, onBack, onReport, onRepayment, onRequest }: { id
   const data = useCommitments(id), [confirmation,setConfirmation] = useState<ProposalAction | null>(null);
   const row = data.data?.detail, other = row && counterparty(row,data.userId);
   const copy = confirmation && other ? proposalConfirmation(confirmation,other.display_name) : null;
-  return <Screen><Button title="Back to Commitments" variant="quiet" onPress={onBack} /><Title>Commitment detail</Title>
+  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS==="ios"?"padding":undefined}><Screen><Button title="Back to Commitments" variant="quiet" onPress={onBack} /><Title>Commitment detail</Title>
     <Button title="Refresh commitment" variant="quiet" disabled={data.busy} onPress={() => void data.refresh()} /><Feedback error={data.error} busy={data.busy} />
     {row && other && <><Card><PersonRow name={other.display_name} role={"You are the " + commitmentRole(row,data.userId)!.toLowerCase()} />
       <StatusChip label={statusLabels[row.status]} /><Body>{proposalContext(row,data.userId)}</Body><Amount minor={row.principal_amount_minor} currency={row.currency} size="card"/>
@@ -123,7 +123,7 @@ function CommitmentDetail({ id, onBack, onReport, onRepayment, onRequest }: { id
         <Title>{copy.title}</Title><Body>{copy.body}</Body><Button title="Go back" variant="quiet" onPress={() => setConfirmation(null)} /><Button title={copy.button}
           onPress={() => {const action = confirmation!; setConfirmation(null); void data.action(action);}} /></View></View></Modal>}
     </>}
-  </Screen>;
+  </Screen></KeyboardAvoidingView>;
 }
 const styles = StyleSheet.create({
   flex: {flex:1}, form: {gap:spacing.lg}, choice: {minHeight:controls.button,padding:spacing.md,borderWidth:1,borderColor:colors.border,borderRadius:radii.control},
