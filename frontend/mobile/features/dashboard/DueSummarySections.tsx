@@ -1,15 +1,15 @@
 import { View } from "react-native";
 import type { DueSummaryPage } from "@fides/shared/api/due-summaries";
 import { dueDateLabel, dueInstallmentLabel, dueRoleLabel } from "@fides/shared/dashboard/due-presentation";
-import { Amount, Body, Button, Card, EmptyState, ErrorState, LoadingState, Title } from "../../components/ui";
+import { Amount, Body, Button, Card, EmptyState, ErrorState, LoadingState, SectionTitle } from "../../components/ui";
 import { useDueSummaries } from "./useDueSummaries";
 
 export interface DueSectionState { data:DueSummaryPage|null; busy:boolean; error:string|null }
 
 function DueSection({title,state,onRetry,onLoadMore,onOpen}:{title:string;state:DueSectionState;onRetry:()=>void;onLoadMore:()=>void;onOpen:(id:string)=>void}){
  const isUpcoming=title.startsWith("Upcoming"),sectionName=isUpcoming?"upcoming due items":"overdue items";
- return <><Title>{title}</Title>
-  <Button title={"Refresh "+(isUpcoming?"upcoming":"overdue")} variant="quiet" disabled={state.busy} onPress={onRetry}/>
+ return <><SectionTitle>{title}</SectionTitle>
+  {state.data&&!state.error&&<Button title={"Refresh "+(isUpcoming?"upcoming":"overdue")} variant="quiet" disabled={state.busy} onPress={onRetry}/>}
   {state.busy&&!state.data&&<LoadingState message={"Loading "+sectionName+"…"}/>}
   {state.busy&&state.data&&<View accessibilityLiveRegion="polite"><Body supporting>Updating {sectionName}…</Body></View>}
   {state.error&&<><ErrorState message={state.error}/><Button title={"Retry "+(isUpcoming?"upcoming":"overdue")} variant="quiet" disabled={state.busy} onPress={onRetry}/></>}
