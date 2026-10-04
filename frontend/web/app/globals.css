@@ -214,10 +214,12 @@ main {
 }
 .person {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: var(--space-md);
   padding-block: var(--space-md);
 }
+.person > div { min-width: 0; overflow-wrap: anywhere; }
 .avatar {
   display: inline-flex;
   align-items: center;
@@ -232,6 +234,9 @@ main {
 }
 .chip {
   display: inline-flex;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   border: 1px solid var(--border);
   border-radius: var(--radius-compact);
   padding: var(--space-xs) var(--space-sm);
