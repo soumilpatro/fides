@@ -39,10 +39,10 @@ export function ReportRepayment({id,onBack,onDetail}:{id:string;onBack:()=>void;
 }
 function Confirmation({action,onCancel,onSubmit}:{action:DecisionAction;onCancel:()=>void;onSubmit:(body:DecisionRequest)=>void}) {
  const [note,setNote]=useState(""),[error,setError]=useState<string|null>(null),copy=decisionCopy(action);
- return <Modal transparent visible animationType="fade" onRequestClose={onCancel}><View style={styles.overlay}><View accessibilityViewIsModal style={styles.dialog}><Title>{copy.title}</Title><Body>{copy.body}</Body><Body supporting>{copy.support}</Body>
+ return <Modal transparent visible animationType="fade" onRequestClose={onCancel}><KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS==="ios"?"padding":undefined}><View accessibilityViewIsModal style={styles.dialog}><Title>{copy.title}</Title><Body>{copy.body}</Body><Body supporting>{copy.support}</Body>
    <TextField label="Note (optional)" multiline value={note} hint={copy.hint+" "+Array.from(note.trim()).length+"/500"} onChangeText={setNote}/>{error && <ErrorState message={error}/>}
    <Button title="Go back" variant="quiet" onPress={onCancel}/><Button title={copy.button} variant={action === "dispute" ? "secondary" : "primary"} onPress={()=>{try{onSubmit(decisionBody(note));}catch(error){setError(error instanceof Error ? error.message : "Check the note.");}}}/>
- </View></View></Modal>;
+ </View></KeyboardAvoidingView></Modal>;
 }
 export function RepaymentDetail({id,onBack}:{id:string;onBack:()=>void}) {
  const data=useRepayments(undefined,id),[confirmation,setConfirmation]=useState<DecisionAction|null>(null),row=data.data?.detail,parent=data.data?.parent;
