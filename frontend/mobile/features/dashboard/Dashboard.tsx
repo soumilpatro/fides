@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { formatMoney } from "@fides/shared/domain/money";
 import { netMeaning,netText,historyText } from "@fides/shared/dashboard/presentation";
 import { counterparty,statusLabels } from "@fides/shared/commitments/model";
 import { Amount,Body,Button,Card,LoadingState,ErrorState,EmptyState,StatusChip,Screen,Title } from "../../components/ui";
@@ -34,7 +33,7 @@ function HistoryIndex({onCreate,onSelect}:{onCreate:()=>void;onSelect:(id:string
  return <Screen><Title>Activity</Title><Body>Activity is recorded separately for each commitment.</Body><Button title="Refresh commitments" variant="quiet" disabled={data.busy} onPress={()=>void data.refresh()}/>
  {data.busy&&<LoadingState message="Loading your commitments…"/>}{data.error&&<ErrorState message={data.error}/>}
  {data.data?.rows.length===0&&<><EmptyState title="No activity yet" message="Activity appears within your commitments as you and the other participant record changes."/><Button title="Create commitment" onPress={onCreate}/></>}
- {data.data?.rows.map(row=><Card key={row.id} title={counterparty(row,data.userId)!.display_name}><Body>{row.type==="IOU"?"IOU":"Peer loan"} · {formatMoney(row.principal_amount_minor,row.currency)}</Body><StatusChip label={statusLabels[row.status]}/><Button title={"View history with "+counterparty(row,data.userId)!.display_name} variant="quiet" onPress={()=>onSelect(row.id)}/></Card>)}</Screen>;
+ {data.data?.rows.map(row=><Card key={row.id} title={counterparty(row,data.userId)!.display_name}><Body>{row.type==="IOU"?"IOU":"Peer loan"}</Body><Amount minor={row.principal_amount_minor} currency={row.currency} size="row"/><StatusChip label={statusLabels[row.status]}/><Button title={"View history with "+counterparty(row,data.userId)!.display_name} variant="quiet" onPress={()=>onSelect(row.id)}/></Card>)}</Screen>;
 }
 function SelectedHistory({id,onBack,onRepayment}:{id:string;onBack:()=>void;onRepayment:(id:string)=>void}){
  const data=useCommitments(id),row=data.data?.detail;
