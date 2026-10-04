@@ -243,11 +243,15 @@ export function ErrorState({ message }: { message: string }) {
 }
 const styles = StyleSheet.create({
   body: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "Manrope",
     fontSize: typography.size.body,
     color: colors.text.primary,
   },
   supporting: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "Manrope",
     fontSize: typography.size.supporting,
     color: colors.text.primary,
@@ -268,6 +272,8 @@ const styles = StyleSheet.create({
     color: colors.brand.signal,
   },
   label: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "ManropeSemiBold",
     fontSize: typography.size.body,
     color: colors.text.primary,
@@ -286,6 +292,9 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: colors.brand.signal },
   quiet: { borderColor: colors.border },
   buttonText: {
+    maxWidth: "100%",
+    flexShrink: 1,
+    textAlign: "center",
     fontFamily: "ManropeSemiBold",
     fontSize: typography.size.body,
     color: colors.brand.signal,
@@ -331,6 +340,8 @@ const styles = StyleSheet.create({
   person: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
   personText: { flex: 1, gap: spacing.xs },
   amount: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "ManropeSemiBold",
     fontVariant: ["tabular-nums"],
     color: colors.text.primary,
