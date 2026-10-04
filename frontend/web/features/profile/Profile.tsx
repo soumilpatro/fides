@@ -11,7 +11,7 @@ function Deactivate({busy,error,blocked,onCancel,onDeactivate}:{busy:boolean;err
  return <dialog tabIndex={-1} onKeyDown={trapConfirmationFocus} ref={dialog} className="connection-confirm f6-dialog" aria-labelledby="deactivate-title" aria-describedby="deactivate-body" onCancel={e=>{if(busy)e.preventDefault();else onCancel();}}>
  <h2 id="deactivate-title">Deactivate account?</h2><p id="deactivate-body">Your account will be deactivated. This action is only available when Fides has no unresolved commitments preventing deactivation.</p>
  <TextField label="Type DEACTIVATE to continue." autoComplete="off" autoFocus disabled={busy} value={typed} onChange={e=>setTyped(e.target.value)}/>
- {error&&<ErrorState message={error}/>} {blocked&&<Link className="button button--secondary" href="/app/overview" onClick={onCancel}>Back to commitments</Link>}
+ {error&&<ErrorState message={error}/>} {blocked&&<Link className="button button--secondary" href="/app/commitments" onClick={onCancel}>Back to commitments</Link>}
  <div className="button-row"><Button variant="quiet" disabled={busy} onClick={onCancel}>Go back</Button><Button variant="destructive" disabled={busy||typed!=="DEACTIVATE"} onClick={()=>onDeactivate(typed)}>{busy?"Deactivating…":"Deactivate account"}</Button></div></dialog>;
 }
 export function Profile(){
@@ -31,8 +31,8 @@ export function Profile(){
  <p className="supporting">Choose whether Fides records due-date reminders in your in-app notifications. Changes are confirmed by the server before the toggle changes.</p>
  {preferences.busy&&!preferences.data&&<p role="status">Loading notification preferences…</p>}
  {preferences.data&&<div className="preference-list">
- <label className="preference-row"><span><strong>Upcoming due reminders</strong><span className="supporting">Notify me when a payment due date is approaching.</span></span><input type="checkbox" checked={preferences.data.due_reminders_enabled} disabled={preferences.busy} onChange={e=>void preferences.setPreference("due_reminders_enabled",e.target.checked)} aria-label="Upcoming due reminders"/></label>
- <label className="preference-row"><span><strong>Overdue reminders</strong><span className="supporting">Notify me when a payment becomes overdue.</span></span><input type="checkbox" checked={preferences.data.overdue_reminders_enabled} disabled={preferences.busy} onChange={e=>void preferences.setPreference("overdue_reminders_enabled",e.target.checked)} aria-label="Overdue reminders"/></label>
+ <label className="preference-row"><span><strong>Upcoming due reminders</strong><span className="supporting">Notify me when a payment due date is approaching.</span></span><input type="checkbox" role="switch" checked={preferences.data.due_reminders_enabled} disabled={preferences.busy} onChange={e=>void preferences.setPreference("due_reminders_enabled",e.target.checked)} aria-label="Upcoming due reminders"/></label>
+ <label className="preference-row"><span><strong>Overdue reminders</strong><span className="supporting">Notify me when a payment becomes overdue.</span></span><input type="checkbox" role="switch" checked={preferences.data.overdue_reminders_enabled} disabled={preferences.busy} onChange={e=>void preferences.setPreference("overdue_reminders_enabled",e.target.checked)} aria-label="Overdue reminders"/></label>
  </div>}
  {preferences.saved&&<p role="status">Notification preferences saved.</p>}{preferences.error&&<><ErrorState message={preferences.error}/><Button variant="quiet" disabled={preferences.busy} onClick={()=>void preferences.refresh()}>Retry notification preferences</Button></>}
  </Card>
