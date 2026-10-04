@@ -33,6 +33,12 @@ h3,
 p {
   margin-top: 0;
 }
+h1,
+h2,
+h3 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
 h1 {
   font-size: var(--type-title);
   line-height: 1.25;
