@@ -119,8 +119,8 @@ class Settings(BaseSettings):
             )
             if any(not re.fullmatch(r"VA[0-9a-fA-F]{32}", sid) for sid in services):
                 raise ValueError("Twilio requires both valid Verify Service SIDs.")
-            if services[0] == services[1]:
-                raise ValueError("Signup and login must use distinct Verify Services.")
+            if self.app_env == "production" and services[0] == services[1]:
+                raise ValueError("Production signup and login must use distinct Verify Services.")
             if not self.twilio_api_key_secret.get_secret_value().strip():
                 raise ValueError("Twilio requires an API Key Secret.")
         if self.otp_provider != "disabled":
