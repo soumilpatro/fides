@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Modal, View } from "react-native";
-import { formatMoney } from "@fides/shared/domain/money";
 import { closureBody, type MutualClosure } from "@fides/shared/api/mutual-closure";
 import { canRequestMutualClosure, closureStatusLabel, hasPendingRepayment, mutualClosureActions, verifiedRepayments } from "@fides/shared/mutual-closure/model";
 import { Amount, Body, Button, Card, EmptyState, ErrorState, LoadingState, StatusChip, TextField, Title } from "../../components/ui";
