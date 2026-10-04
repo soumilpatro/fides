@@ -2,6 +2,7 @@
 
 import pytest
 from app.config import Settings
+from app.db.session import _database_target
 from pydantic import ValidationError
 
 
@@ -172,3 +173,22 @@ def test_component_database_configuration_requires_complete_secret_set():
     assert settings.database_name == "railway"
     assert "p@ss:/?#[]value" not in repr(settings)
     assert "p@ss:/?#[]value" not in settings.model_dump_json()
+
+
+def test_component_database_target_handles_reserved_password_characters():
+    raw_password = "p@ss:/?#[]value"
+    settings = Settings(
+        _env_file=None,
+        database_host="postgres.railway.internal",
+        database_port=5432,
+        database_name="railway",
+        database_user="fides_api",
+        database_password=raw_password,
+    )
+    target = _database_target(settings)
+    assert target.username == "fides_api"
+    assert target.password == raw_password
+    assert target.host == "postgres.railway.internal"
+    assert target.port == 5432
+    assert target.database == "railway"
+    assert raw_password not in str(target)
