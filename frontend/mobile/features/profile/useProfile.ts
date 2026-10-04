@@ -18,5 +18,6 @@ export function useProfile(){
   catch(e){const unresolved=e instanceof ApiError&&e.code==="ACCOUNT_HAS_UNRESOLVED_COMMITMENTS";setBlocked(unresolved);setError(unresolved?"Your account can't be deactivated while unresolved commitments remain.":e instanceof ApiError?e.message:"Deactivation could not be confirmed. Refresh your session before trying again.");return false;}
   finally{flight.current=false;setBusy(false);}
  };
- return {user,busy,error,saved,blocked,save,deactivate,refresh:()=>session.bootstrap(),logout:()=>session.logout()};
+ const clearFeedback=()=>{setError(null);setSaved(false);setBlocked(false);};
+ return {user,busy,error,saved,blocked,save,deactivate,clearFeedback,refresh:()=>session.bootstrap(),logout:()=>session.logout()};
 }
