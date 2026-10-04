@@ -257,11 +257,15 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   title: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "ManropeBold",
     fontSize: typography.size.title,
     color: colors.text.primary,
   },
   section: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "ManropeBold",
     fontSize: typography.size.section,
     color: colors.text.primary,
@@ -280,6 +284,8 @@ const styles = StyleSheet.create({
   },
   stack: { gap: spacing.sm },
   button: {
+    maxWidth: "100%",
+    flexShrink: 1,
     minHeight: controls.button,
     borderWidth: 1,
     borderColor: colors.brand.signal,
