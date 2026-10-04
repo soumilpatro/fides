@@ -6,10 +6,10 @@ import { formatMoney } from "@fides/shared/domain/money";
 import { canReport, canDecide, labels, semantics, reportBody, decisionBody, decisionCopy, type DecisionAction } from "@fides/shared/repayments/model";
 import { statusLabels } from "@fides/shared/commitments/model";
 import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
-import { Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Screen, StatusChip, TextField, Title } from "../../components/ui";
+import { Amount, Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Screen, StatusChip, TextField, Title } from "../../components/ui";
 import { useRepayments } from "./useRepayments";
 function Feedback({error,busy}:{error:string|null;busy:boolean}) {return <>{error && <ErrorState message={error}/>} {busy && <LoadingState message="Loading the authoritative repayment record…"/>}</>;}
-function Facts({row}:{row:Repayment}) {return <><PersonRow name={row.reported_by.display_name} role="Reported by"/><Body>{formatMoney(row.amount_minor,row.currency)}</Body><StatusChip label={labels[row.status]} status={semantics[row.status]}/>
+function Facts({row}:{row:Repayment}) {return <><PersonRow name={row.reported_by.display_name} role="Reported by"/><Amount minor={row.amount_minor} currency={row.currency} size="card"/><StatusChip label={labels[row.status]} status={semantics[row.status]}/>
   <Body>Payment date: {dateOnlyLabel(row.payment_date)}</Body><Body supporting>Reported at: {row.reported_at}</Body><Body>Note: {row.note || "No note"}</Body>
   {row.status === "PENDING_VERIFICATION" && <Body supporting>Reported, not yet verified. The other participant still needs to verify or dispute this repayment.</Body>}</>;}
 export function RepaymentsSection({id,onReport,onDetail}:{id:string;onReport:()=>void;onDetail:(id:string)=>void}) {
@@ -26,7 +26,7 @@ export function ReportRepayment({id,onBack,onDetail}:{id:string;onBack:()=>void;
  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS==="ios"?"padding":undefined}><Screen><Button title="Back to commitment" variant="quiet" onPress={onBack}/><Title>Report repayment</Title><Feedback error={data.error} busy={data.busy}/>{validation && <ErrorState message={validation}/>}
    <Button title="Refresh record" variant="quiet" disabled={data.busy} onPress={()=>void data.refresh()}/>{parent && <Body>Commitment currency: {parent.currency} · {statusLabels[parent.status]}</Body>}
    {parent && data.fresh && !canReport(parent,data.userId) && <ErrorState message="This commitment does not currently allow repayment reporting."/>}
-   {body ? <><Card title="Review repayment"><Body>{formatMoney(body.amount_minor,body.currency)}</Body><Body>Payment date: {dateOnlyLabel(body.payment_date)}</Body><Body>Note: {body.note || "No note"}</Body><Body>You are reporting this repayment.</Body><Body>It will remain pending until the other participant verifies or disputes it.</Body><Body supporting>Fides records this repayment. Money moves outside Fides.</Body></Card>
+   {body ? <><Card title="Review repayment"><Amount minor={body.amount_minor} currency={body.currency} size="card"/><Body>Payment date: {dateOnlyLabel(body.payment_date)}</Body><Body>Note: {body.note || "No note"}</Body><Body>You are reporting this repayment.</Body><Body>It will remain pending until the other participant verifies or disputes it.</Body><Body supporting>Fides records this repayment. Money moves outside Fides.</Body></Card>
      {pending && <Body>The earlier attempt may have completed. Its original key and payload are retained; refresh before explicitly retrying the same request.</Body>}
      {!pending && <Button title="Edit report" variant="quiet" disabled={data.busy} onPress={()=>setReview(null)}/>}
      <Button title={pending ? "Retry same report" : "Report repayment"} disabled={data.busy || !eligible || !!pending?.blocked || !!pending?.needsReconcile} onPress={()=>{void data.report(body).then(row=>{if(row)onDetail(row.id);});}}/></> : parent && <View style={styles.stack}>
