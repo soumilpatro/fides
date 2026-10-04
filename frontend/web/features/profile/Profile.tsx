@@ -18,7 +18,7 @@ export function Profile(){
  const data=useProfile(),preferences=useNotificationPreferences(),[editing,setEditing]=useState(false),[name,setName]=useState(""),[timezone,setTimezone]=useState(""),[deactivating,setDeactivating]=useState(false),[validation,setValidation]=useState<string|null>(null);
  if(!data.user)return null;
  const user=data.user;
- const edit=()=>{setName(user.display_name);setTimezone(user.timezone);setValidation(null);setEditing(true);};
+ const edit=()=>{data.clearFeedback();setName(user.display_name);setTimezone(user.timezone);setValidation(null);setEditing(true);};
  return <div className="f6-stack"><h1>Profile / Settings</h1><Card title="Profile">
  <dl className="commitment-facts"><dt>Display name</dt><dd>{user.display_name}</dd><dt>Phone (read-only)</dt><dd>{user.phone_e164??"Unavailable"}</dd><dt>Timezone</dt><dd>{user.timezone}</dd></dl>
  {editing?<form className="f6-stack" onSubmit={e=>{e.preventDefault();try{new Intl.DateTimeFormat("en",{timeZone:timezone});if(!name.trim())throw new Error("Enter a display name.");setValidation(null);const body={...(name!==user.display_name?{display_name:name}:{}),...(timezone!==user.timezone?{timezone}:{})};void data.save(body).then(ok=>{if(ok)setEditing(false);});}catch{setValidation("Enter a display name and a valid IANA timezone.");}}}>
@@ -34,9 +34,9 @@ export function Profile(){
  <label className="preference-row"><span><strong>Upcoming due reminders</strong><span className="supporting">Notify me when a payment due date is approaching.</span></span><input type="checkbox" role="switch" checked={preferences.data.due_reminders_enabled} disabled={preferences.busy} onChange={e=>void preferences.setPreference("due_reminders_enabled",e.target.checked)} aria-label="Upcoming due reminders"/></label>
  <label className="preference-row"><span><strong>Overdue reminders</strong><span className="supporting">Notify me when a payment becomes overdue.</span></span><input type="checkbox" role="switch" checked={preferences.data.overdue_reminders_enabled} disabled={preferences.busy} onChange={e=>void preferences.setPreference("overdue_reminders_enabled",e.target.checked)} aria-label="Overdue reminders"/></label>
  </div>}
- {preferences.saved&&<p role="status">Notification preferences saved.</p>}{preferences.error&&<><ErrorState message={preferences.error}/><Button variant="quiet" disabled={preferences.busy} onClick={()=>void preferences.refresh()}>Retry notification preferences</Button></>}
+ {preferences.busy&&preferences.data&&<p role="status">Saving notification preferences…</p>}{preferences.saved&&<p role="status">Notification preferences saved.</p>}{preferences.error&&<><ErrorState message={preferences.error}/><Button variant="quiet" disabled={preferences.busy} onClick={()=>void preferences.refresh()}>Retry notification preferences</Button></>}
  </Card>
- <Card title="Account"><div className="button-row"><Button variant="secondary" disabled={data.busy} onClick={()=>void data.logout()}>Log out</Button><Button variant="destructive" disabled={data.busy} onClick={()=>setDeactivating(true)}>Deactivate account</Button></div></Card>
- {deactivating&&<Deactivate busy={data.busy} error={data.error} blocked={data.blocked} onCancel={()=>setDeactivating(false)} onDeactivate={value=>void data.deactivate(value)}/>}
+ <Card title="Account"><div className="button-row"><Button variant="secondary" disabled={data.busy} onClick={()=>void data.logout()}>Log out</Button><Button variant="destructive" disabled={data.busy} onClick={()=>{data.clearFeedback();setDeactivating(true);}}>Deactivate account</Button></div></Card>
+ {deactivating&&<Deactivate busy={data.busy} error={data.error} blocked={data.blocked} onCancel={()=>{data.clearFeedback();setDeactivating(false);}} onDeactivate={value=>void data.deactivate(value)}/>}
  </div>;
 }
