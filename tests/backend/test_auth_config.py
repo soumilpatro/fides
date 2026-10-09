@@ -2,6 +2,7 @@
 
 import pytest
 from app.config import Settings
+from app.db.session import _database_target
 from pydantic import ValidationError
 
 
@@ -99,8 +100,28 @@ def test_distinct_services_required_and_secrets_redacted():
     assert "test-only" not in repr(settings)
     assert "test-only" not in settings.model_dump_json()
     with pytest.raises(ValidationError) as exc:
-        Settings(_env_file=None, **twilio_settings(twilio_verify_login_service_sid="VA" + "2" * 32))
+        Settings(
+            _env_file=None,
+            **twilio_settings(
+                app_env="production",
+                twilio_verify_login_service_sid="VA" + "2" * 32,
+            ),
+        )
     assert "test-only" not in str(exc.value)
+
+
+def test_staging_allows_shared_twilio_trial_service():
+    shared_sid = "VA" + "2" * 32
+    settings = Settings(
+        _env_file=None,
+        **twilio_settings(
+            app_env="staging",
+            twilio_verify_signup_service_sid=shared_sid,
+            twilio_verify_login_service_sid=shared_sid,
+        ),
+    )
+    assert settings.twilio_verify_signup_service_sid == shared_sid
+    assert settings.twilio_verify_login_service_sid == shared_sid
 
 
 @pytest.mark.parametrize("provider", ["disabled", "fake"])
@@ -134,3 +155,40 @@ def test_environment_normalizes_and_database_credentials_are_not_in_repr():
     )
     assert settings.app_env == "test"
     assert "private-db-password" not in repr(settings)
+
+
+def test_component_database_configuration_requires_complete_secret_set():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, database_host="postgres.railway.internal")
+
+    settings = Settings(
+        _env_file=None,
+        database_host="postgres.railway.internal",
+        database_port=5432,
+        database_name="railway",
+        database_user="fides_api",
+        database_password="p@ss:/?#[]value",
+    )
+    assert settings.database_host == "postgres.railway.internal"
+    assert settings.database_name == "railway"
+    assert "p@ss:/?#[]value" not in repr(settings)
+    assert "p@ss:/?#[]value" not in settings.model_dump_json()
+
+
+def test_component_database_target_handles_reserved_password_characters():
+    raw_password = "p@ss:/?#[]value"
+    settings = Settings(
+        _env_file=None,
+        database_host="postgres.railway.internal",
+        database_port=5432,
+        database_name="railway",
+        database_user="fides_api",
+        database_password=raw_password,
+    )
+    target = _database_target(settings)
+    assert target.username == "fides_api"
+    assert target.password == raw_password
+    assert target.host == "postgres.railway.internal"
+    assert target.port == 5432
+    assert target.database == "railway"
+    assert raw_password not in str(target)

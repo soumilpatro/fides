@@ -14,15 +14,29 @@ route beyond the readiness check.
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
 
 
+def _database_target(settings):
+    if settings.database_host:
+        return URL.create(
+            "postgresql+psycopg",
+            username=settings.database_user,
+            password=settings.database_password.get_secret_value(),
+            host=settings.database_host,
+            port=settings.database_port,
+            database=settings.database_name,
+        )
+    return settings.database_url
+
+
 def _build_engine():
     settings = get_settings()
     return create_engine(
-        settings.database_url,
+        _database_target(settings),
         isolation_level=settings.database_isolation_level,
         pool_pre_ping=True,  # detect and discard stale/dropped connections
         pool_size=5,
