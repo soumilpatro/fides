@@ -507,3 +507,39 @@ main {
 .due-summary-section .card{min-width:0}
 .due-summary-name,.due-summary-amount{max-width:100%;overflow-wrap:anywhere;word-break:normal}
 .due-summary-amount{white-space:normal}
+
+/* Presentation density for authenticated web surfaces; tokens and data stay intact. */
+.app-shell .container { max-width: 72rem; padding: var(--space-xl); }
+.connections-feature .card, .commitments-feature .card, .f6-stack .card {
+  height: auto;
+  padding: var(--space-lg);
+}
+.connections-feature > .button--quiet, .commitments-feature > .button--quiet, .f6-stack > .button--quiet {
+  justify-self: start;
+}
+.connections-feature > h1, .commitments-feature > h1, .commitments-feature > h2,
+.f6-stack > h1, .f6-stack > h2, .connections-feature > p,
+.commitments-feature > p, .f6-stack > p { margin-bottom: 0; }
+.connections-feature .auth-back, .commitments-feature .auth-back { margin-top: 0; }
+.connections-feature .section-heading h1, .commitments-feature .section-heading h2 {
+  margin-bottom: var(--space-sm);
+}
+.connection-row .person { padding-block: 0; }
+.connection-dates { grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.commitments-feature .card > .amount { margin-block: var(--space-sm); }
+.commitment-row { margin-block: var(--space-sm) var(--space-md); }
+.commitment-row .amount { margin-right: auto; }
+.summary-grid .commitment-facts { grid-template-columns: minmax(0, 1fr); }
+.summary-grid dt { font-size: var(--type-supporting); }
+.summary-grid dd { font-size: var(--type-amountCard); line-height: 1.4; margin-bottom: var(--space-sm); }
+.history-list .card > h3 { margin-bottom: var(--space-sm); }
+.history-list time { display: block; font-size: var(--type-metadata); margin-bottom: var(--space-sm); }
+.f6-stack .card > .button { margin-inline-end: var(--space-sm); margin-block: var(--space-xs); }
+.preference-row { justify-content: flex-start; }
+.preference-row > span { flex: 0 1 36rem; }
+@media (max-width: 45rem) {
+  .app-shell .container { padding: var(--space-lg); }
+  .commitment-facts { grid-template-columns: minmax(0, 1fr); }
+  .commitment-facts dd + dt { margin-top: var(--space-sm); }
+  .preference-row { gap: var(--space-md); }
+}

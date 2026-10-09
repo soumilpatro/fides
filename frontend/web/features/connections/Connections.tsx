@@ -25,7 +25,7 @@ export function ConnectionsList() {
       <ul className="connection-list">{section.rows.map(row => {
         const other = otherParticipant(row, data.userId)!;
         return <li key={row.id}><Link className="connection-row" href={"/app/connections/" + row.id} aria-label={"View connection with " + other.display_name}>
-          <PersonRow name={other.display_name} role={relationshipContext(row, data.userId)} />
+          <PersonRow name={other.display_name} role={row.status === "PENDING" ? relationshipContext(row, data.userId) : ""} />
           <StatusChip label={statusLabel[row.status]} /><span className="supporting">View details →</span>
         </Link></li>;
       })}</ul>
@@ -69,12 +69,12 @@ export function ConnectionDetail({ id }: { id: string }) {
     <Feedback error={data.error} busy={data.busy} />
     {!row && data.busy && <LoadingState message="Loading connection…" />}
     {row && other && <Card>
-      <PersonRow name={other.display_name} role={relationshipContext(row, data.userId)} />
+      <PersonRow name={other.display_name} role={row.status === "PENDING" ? relationshipContext(row, data.userId) : ""} />
       <StatusChip label={statusLabel[row.status]} />
       <dl className="connection-dates"><div><dt>Created</dt><dd><time dateTime={row.created_at}>{date(row.created_at)}</time></dd></div>
         <div><dt>Updated</dt><dd><time dateTime={row.updated_at}>{date(row.updated_at)}</time></dd></div></dl>
-      {row.status === "BLOCKED" && <p>This connection is blocked. Fides does not currently provide an unblock action.</p>}
-      {row.status === "REMOVED" && <><p>This connection is removed. To send a new request, enter the phone number again.</p>
+      {row.status === "BLOCKED" && <p>Fides does not currently provide an unblock action.</p>}
+      {row.status === "REMOVED" && <><p>To send a new request, enter the phone number again.</p>
         <Link className="button button--secondary" href="/app/connections/new">Send new request</Link></>}
       {row.status === "ACCEPTED" && <Link className="button button--primary" href={"/app/commitments/new?connection=" + row.id}>Create commitment</Link>}
       <div className="button-row">{availableConnectionActions(row, data.userId).map(action =>

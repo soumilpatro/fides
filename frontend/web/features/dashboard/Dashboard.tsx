@@ -19,7 +19,7 @@ export function Summary(){
 }
 export function History({id}:{id:string}){
  const data=useHistory(id);
- return <section aria-labelledby={"history-"+id} className="commitments-feature"><h2 id={"history-"+id}>Commitment history</h2><p className="supporting">Oldest first. History loads in live pages; it is not a fixed snapshot.</p>
+ return <section aria-labelledby={"history-"+id} className="commitments-feature"><h2 id={"history-"+id}>Commitment history</h2><p className="supporting">Oldest first. Load more to see later events. History can change as new events are recorded.</p>
  <Button variant="quiet" disabled={data.busy} onClick={()=>void data.refresh()}>Refresh history</Button>
  {data.busy&&<LoadingState message="Loading commitment history…"/>}{data.error&&<ErrorState message={data.error}/>}
  {data.data?.items.length===0&&<p>No history available yet.</p>}
@@ -36,10 +36,10 @@ export function Activity(){
  <Button variant="quiet" disabled={data.busy} onClick={()=>void data.refresh()}>Refresh commitments</Button>
  {data.busy&&<LoadingState message="Loading your commitments…"/>}{data.error&&<ErrorState message={data.error}/>}
  {data.data?.rows.length===0&&<><EmptyState title="No activity yet" message="Activity appears within your commitments as you and the other participant record changes."/><Link className="button button--primary" href="/app/commitments/new">Create commitment</Link></>}
- {data.data?.rows.map(row=><Card key={row.id} title={counterparty(row,data.userId)!.display_name}><p>{row.type==="IOU"?"IOU":"Peer loan"} · {formatMoney(row.principal_amount_minor,row.currency)}</p><StatusChip label={statusLabels[row.status]}/><Link className="button button--quiet" href={"/app/activity/"+row.id}>View history with {counterparty(row,data.userId)!.display_name}</Link></Card>)}</div>;
+ {data.data?.rows.map(row=><Card key={row.id} title={counterparty(row,data.userId)!.display_name}><p>{row.type==="IOU"?"IOU":"Peer loan"}</p><strong className="amount amount--card">{formatMoney(row.principal_amount_minor,row.currency)}</strong><StatusChip label={statusLabels[row.status]}/><Link className="button button--quiet" href={"/app/activity/"+row.id}>View history with {counterparty(row,data.userId)!.display_name}</Link></Card>)}</div>;
 }
 export function SelectedHistory({id}:{id:string}){
  const data=useCommitments(id),row=data.data?.detail;
  return <div className="commitments-feature"><Link className="auth-back" href="/app/activity">← Activity</Link><h1>Commitment history</h1>{data.busy&&<LoadingState message="Loading the commitment…"/>}{data.error&&<ErrorState message={data.error}/>}
- {row&&<><Card title={counterparty(row,data.userId)!.display_name}><p>{formatMoney(row.principal_amount_minor,row.currency)}</p><StatusChip label={statusLabels[row.status]}/><Link href={"/app/commitments/"+id}>View current commitment</Link></Card><History key={id} id={id}/></>}</div>;
+ {row&&<><Card title={counterparty(row,data.userId)!.display_name}><strong className="amount amount--card">{formatMoney(row.principal_amount_minor,row.currency)}</strong><StatusChip label={statusLabels[row.status]}/><Link href={"/app/commitments/"+id}>View current commitment</Link></Card><History key={id} id={id}/></>}</div>;
 }
