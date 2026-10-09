@@ -5,6 +5,7 @@ import type { Extension, ExtensionRequest } from "@fides/shared/api/extensions";
 import { canRequestExtension, extensionActions, extensionBody } from "@fides/shared/extensions/model";
 import { Body,Button,Card,EmptyState,ErrorState,LoadingState,Screen,StatusChip,TextField,Title } from "../../components/ui";
 import { useExtensions } from "./useExtensions";
+import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
 export function ExtensionsSection({id,onRequest,onChanged}:{id:string;onRequest:()=>void;onChanged:()=>void}){
  const data=useExtensions(id),[confirmation,setConfirmation]=useState<{row:Extension;action:"accept"|"reject"}|null>(null);
  return <View style={styles.stack}><Text accessibilityRole="header" style={styles.section}>Due-date extension</Text><Button title="Refresh extensions" variant="quiet" disabled={data.busy} onPress={()=>void data.refresh()}/>
@@ -13,7 +14,7 @@ export function ExtensionsSection({id,onRequest,onChanged}:{id:string;onRequest:
  {data.pending("create")&&<Button title="Review earlier extension request" variant="secondary" onPress={onRequest}/>}
  {!data.data.rows.length&&<EmptyState title="No extension requests" message="A due-date change needs the other participant's acceptance."/>}
  {data.data.rows.map(row=><Card key={row.id}><StatusChip label={row.status==="REQUESTED"&&row.requested_by.id===data.user?"Awaiting response":row.status==="REQUESTED"?"Requested":row.status.charAt(0)+row.status.slice(1).toLowerCase()} status={row.status==="REQUESTED"?"PENDING":undefined}/>
- <Body>Requested by {row.requested_by.display_name}</Body><Body>Previous due date: {row.previous_due_date}</Body><Body>{row.status==="ACCEPTED"?"Accepted due date":"Requested due date"}: {row.requested_due_date}</Body>
+ <Body>Requested by {row.requested_by.display_name}</Body><Body>Previous due date: {dateOnlyLabel(row.previous_due_date)}</Body><Body>{row.status==="ACCEPTED"?"Accepted due date":"Requested due date"}: {dateOnlyLabel(row.requested_due_date)}</Body>
  {row.reason&&<Body>{row.reason}</Body>}{row.decided_by&&<Body supporting>{row.decided_by.display_name} · {row.decided_at}</Body>}
  {extensionActions(row,data.user,data.data!.parent,data.data!.terms).map(action=>{
  const pending=data.pending(action,row.id),opposite=data.pending(action==="accept"?"reject":"accept",row.id);
@@ -21,7 +22,7 @@ export function ExtensionsSection({id,onRequest,onChanged}:{id:string;onRequest:
  })}</Card>)}</>}
  {confirmation&&<Modal transparent visible animationType="none" onRequestClose={()=>setConfirmation(null)}><View style={styles.overlay}><View accessibilityViewIsModal style={styles.sheet}>
  <Title>{confirmation.action==="accept"?"Accept this extension?":"Reject this extension?"}</Title>
- <Body>{confirmation.action==="accept"?"The commitment due date will change from "+confirmation.row.previous_due_date+" to "+confirmation.row.requested_due_date+".":"The current due date will remain unchanged."}</Body>
+ <Body>{confirmation.action==="accept"?"The commitment due date will change from "+dateOnlyLabel(confirmation.row.previous_due_date)+" to "+dateOnlyLabel(confirmation.row.requested_due_date)+".":"The current due date will remain unchanged."}</Body>
  <Button title="Go back" variant="quiet" onPress={()=>setConfirmation(null)}/><Button title={confirmation.action==="accept"?"Accept extension":"Reject extension"} onPress={()=>{const {row,action}=confirmation;setConfirmation(null);void data.decide(row,action).then(r=>{if(r)onChanged();});}}/>
  </View></View></Modal>}</View>;
 }
@@ -31,8 +32,8 @@ export function NewExtension({id,onBack}:{id:string;onBack:()=>void}){
  return <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==="ios"?"padding":undefined}><Screen><Button title="Back to commitment" variant="quiet" disabled={data.busy} onPress={onBack}/><Title>Request extension</Title>
  <Body>This changes the due date only if the other participant accepts.</Body>{data.busy&&<LoadingState message="Loading current terms…"/>}{data.error&&<ErrorState message={data.error}/>}
  {validation&&<ErrorState message={validation}/>}
- {data.data&&<><Body>Current due date: {data.due??"No deadline"}</Body>
- {body?<><Card title="Review extension"><Body>Requested due date: {body.requested_due_date}</Body><Body>{body.reason??"No reason supplied"}</Body></Card>
+ {data.data&&<><Body>Current due date: {data.due?dateOnlyLabel(data.due):"No deadline"}</Body>
+ {body?<><Card title="Review extension"><Body>Requested due date: {dateOnlyLabel(body.requested_due_date)}</Body><Body>{body.reason??"No reason supplied"}</Body></Card>
  {pending&&<Body>The earlier attempt may have completed. Its original key and payload are retained. Refresh before explicitly retrying.</Body>}
  {!pending&&<Button title="Edit request" variant="quiet" disabled={data.busy} onPress={()=>setReview(null)}/>}
  <Button title={pending?"Retry same request":"Submit extension request"} disabled={data.busy||!!pending?.blocked||!!pending?.needsReconcile} onPress={()=>void data.request(body).then(r=>{if(r)onBack();})}/>

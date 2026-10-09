@@ -40,6 +40,13 @@ export function Title({ children }: { children: ReactNode }) {
     </Text>
   );
 }
+export function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <Text accessibilityRole="header" style={styles.section}>
+      {children}
+    </Text>
+  );
+}
 export function Micro({ children }: { children: ReactNode }) {
   return <Text style={styles.micro}>{children}</Text>;
 }
@@ -236,21 +243,29 @@ export function ErrorState({ message }: { message: string }) {
 }
 const styles = StyleSheet.create({
   body: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "Manrope",
     fontSize: typography.size.body,
     color: colors.text.primary,
   },
   supporting: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "Manrope",
     fontSize: typography.size.supporting,
     color: colors.text.primary,
   },
   title: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "ManropeBold",
     fontSize: typography.size.title,
     color: colors.text.primary,
   },
   section: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "ManropeBold",
     fontSize: typography.size.section,
     color: colors.text.primary,
@@ -261,12 +276,16 @@ const styles = StyleSheet.create({
     color: colors.brand.signal,
   },
   label: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "ManropeSemiBold",
     fontSize: typography.size.body,
     color: colors.text.primary,
   },
   stack: { gap: spacing.sm },
   button: {
+    maxWidth: "100%",
+    flexShrink: 1,
     minHeight: controls.button,
     borderWidth: 1,
     borderColor: colors.brand.signal,
@@ -279,6 +298,9 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: colors.brand.signal },
   quiet: { borderColor: colors.border },
   buttonText: {
+    maxWidth: "100%",
+    flexShrink: 1,
+    textAlign: "center",
     fontFamily: "ManropeSemiBold",
     fontSize: typography.size.body,
     color: colors.brand.signal,
@@ -324,6 +346,8 @@ const styles = StyleSheet.create({
   person: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
   personText: { flex: 1, gap: spacing.xs },
   amount: {
+    maxWidth: "100%",
+    flexShrink: 1,
     fontFamily: "ManropeSemiBold",
     fontVariant: ["tabular-nums"],
     color: colors.text.primary,

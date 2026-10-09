@@ -1,13 +1,12 @@
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import { colors, controls, radii, spacing } from "@fides/shared/tokens/index";
 import type { CommitmentRequest, Terms } from "@fides/shared/api/commitments";
-import { formatMoney } from "@fides/shared/domain/money";
 import { initialForm, proposalBody, type ProposalForm } from "@fides/shared/commitments/form";
 import { percentText } from "@fides/shared/commitments/money";
 import { commitmentRole, counterparty, currentTerms, proposalActions, proposalContext, proposalConfirmation, scheduleText, statusLabels, type ProposalAction } from "@fides/shared/commitments/model";
 import { otherParticipant } from "@fides/shared/connections/model";
-import { Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Screen, StatusChip, TextField, Title } from "../../components/ui";
+import { Amount, Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Screen, StatusChip, TextField, Title } from "../../components/ui";
 import { useCommitments } from "./useCommitments";
 import { ExtensionsSection, NewExtension } from "../extensions/Extensions";
 import { Summary, History } from "../dashboard/Dashboard";
@@ -15,6 +14,7 @@ import { DueSummaryOverview } from "../dashboard/DueSummarySections";
 import { MutualClosureSection } from "../mutual-closure/MutualClosure";
 import { RepaymentsSection, ReportRepayment, RepaymentDetail } from "../repayments/Repayments";
 import { useAuth } from "../auth/useAuth";
+import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
 type Destination = {page:"extension";id:string} | { page: "list" } | { page: "new"; connection?: string } | { page: "detail"; id: string } | {page:"report";id:string} | {page:"repayment";id:string;parent:string};
 export function Commitments({ initialConnection, initialCreate=false, initialDetail, onConnections }: { initialConnection?: string; initialCreate?: boolean; initialDetail?:string; onConnections: () => void }) {
   const [destination, setDestination] = useState<Destination>(() => initialDetail ? {page:"detail",id:initialDetail} : initialConnection || initialCreate ? { page: "new", connection: initialConnection } : { page: "list" });
@@ -35,7 +35,7 @@ function CommitmentsList({ onNew, onDetail }: { onNew: () => void; onDetail: (id
     <Button title="Refresh commitments" variant="quiet" disabled={data.busy} onPress={() => void data.refresh()} /><Feedback error={data.error} busy={data.busy} />
     {data.data?.rows.length === 0 && <EmptyState title="No commitments yet" message="Create a shared record with someone you're connected to." />}
     {data.data?.rows.map(row => <Card key={row.id}><PersonRow name={counterparty(row,data.userId)!.display_name} role={"You are the " + commitmentRole(row,data.userId)!.toLowerCase()} />
-      <Body>{formatMoney(row.principal_amount_minor,row.currency)}</Body><Body>{row.type === "IOU" ? "IOU" : "Peer loan"}</Body>
+      <Amount minor={row.principal_amount_minor} currency={row.currency} size="row"/><Body>{row.type === "IOU" ? "IOU" : "Peer loan"}</Body>
       <StatusChip label={statusLabels[row.status]} /><Body>{proposalContext(row,data.userId)}</Body>{row.description && <Body supporting>{row.description}</Body>}
       <Button title={"View commitment with " + counterparty(row,data.userId)!.display_name} variant="quiet" onPress={() => onDetail(row.id)} />
     </Card>)}</Screen>;
@@ -48,9 +48,9 @@ function Choice({ label, checked, onPress }: { label: string; checked: boolean; 
 function Review({ body, name, self }: { body: CommitmentRequest; name: string; self: string }) {
   return <Card title="Review proposal"><Body>{body.actor_role === "BORROWER" ? "You are borrowing from " : "You are lending to "}{name}</Body>
     <Body>Borrower: {body.actor_role === "BORROWER" ? self : name}</Body><Body>Lender: {body.actor_role === "LENDER" ? self : name}</Body>
-    <Body>Type: {body.type === "IOU" ? "IOU" : "Peer loan"}</Body><Body>Principal: {formatMoney(body.principal_amount_minor,body.currency)}</Body>
+    <Body>Type: {body.type === "IOU" ? "IOU" : "Peer loan"}</Body><Body>Principal</Body><Amount minor={body.principal_amount_minor} currency={body.currency} size="row"/>
     <Body>Description: {body.description || "No description"}</Body>
-    <Body>Schedule: {body.terms.installment_dates ? body.terms.installment_dates.join(", ") : body.terms.due_date ? "Due " + body.terms.due_date : "No deadline"}</Body>
+    <Body>Schedule: {body.terms.installment_dates ? body.terms.installment_dates.map(dateOnlyLabel).join(", ") : body.terms.due_date ? "Due " + dateOnlyLabel(body.terms.due_date) : "No deadline"}</Body>
     <Body>Interest: {body.terms.interest_type === "NONE" ? "No interest" : "Simple fixed: " + percentText(body.terms.interest_rate_bps!)}</Body>
     <Body>Grace period: {body.terms.grace_period_days} days</Body>
     <Body supporting>Fides records the commitment. Money moves outside Fides. Interest totals and installment amounts come from the server after creation.</Body>
@@ -64,7 +64,7 @@ function NewCommitment({ selected, onBack, onDetail, onConnections }: { selected
   const eligible = data.data?.eligible ?? [], connection = eligible.find(row => row.id === (body?.connection_id ?? form.connection));
   const name = connection ? otherParticipant(connection,data.userId)?.display_name ?? "Selected participant" : "Selected participant";
   const set = <K extends keyof ProposalForm>(field: K, value: ProposalForm[K]) => { setForm(previous => ({...previous,[field]:value})); setValidation(null); };
-  return <Screen><Button title="Back to Commitments" variant="quiet" onPress={onBack} /><Title>Create commitment</Title><Feedback error={data.error} busy={data.busy} />
+  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS==="ios"?"padding":undefined}><Screen><Button title="Back to Commitments" variant="quiet" onPress={onBack} /><Title>Create commitment</Title><Feedback error={data.error} busy={data.busy} />
     {validation && <ErrorState message={validation} />}
     {body ? <><Review body={body} name={name} self={state.status === "authenticated" ? state.user.display_name : "You"} />
       {pending && <Body>An earlier attempt may have completed. Refresh before explicitly retrying the same proposal; its key and payload are retained.</Body>}
@@ -92,11 +92,11 @@ function NewCommitment({ selected, onBack, onDetail, onConnections }: { selected
         <TextField label="Grace period (days)" hint="Integer from 0 to 365." keyboardType="number-pad" value={form.grace} onChangeText={value => set("grace",value)} />
         <Button title="Review proposal" disabled={data.busy} onPress={() => {try { setReview(proposalBody(form,eligible.map(row => row.id))); setValidation(null); } catch (error) {setValidation(error instanceof Error ? error.message : "Check the proposal fields.");}}} />
       </View>}
-  </Screen>;
+  </Screen></KeyboardAvoidingView>;
 }
 function TermsView({ terms }: { terms: Terms }) {
   const v = currentTerms(terms);
-  return <Card title="Current terms"><Body>{scheduleText(v)}</Body>{v.installment_dates?.map(date => <Body key={date}>{date}</Body>)}
+  return <Card title="Current terms"><Body>{scheduleText(v)}</Body>{v.installment_dates?.map(date => <Body key={date}>{dateOnlyLabel(date)}</Body>)}
     <Body>Interest: {v.interest_type === "NONE" ? "No interest" : "Simple fixed: " + percentText(v.interest_rate_bps!)}</Body>
     <Body>Grace period: {v.grace_period_days} days</Body><Body>Due timezone: {v.due_timezone ?? "Timezone not recorded for these legacy terms."}</Body><Body supporting>Version: {v.version_no}</Body></Card>;
 }
@@ -105,15 +105,15 @@ function CommitmentDetail({ id, onBack, onReport, onRepayment, onRequest }: { id
   const data = useCommitments(id), [confirmation,setConfirmation] = useState<ProposalAction | null>(null);
   const row = data.data?.detail, other = row && counterparty(row,data.userId);
   const copy = confirmation && other ? proposalConfirmation(confirmation,other.display_name) : null;
-  return <Screen><Button title="Back to Commitments" variant="quiet" onPress={onBack} /><Title>Commitment detail</Title>
+  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS==="ios"?"padding":undefined}><Screen><Button title="Back to Commitments" variant="quiet" onPress={onBack} /><Title>Commitment detail</Title>
     <Button title="Refresh commitment" variant="quiet" disabled={data.busy} onPress={() => void data.refresh()} /><Feedback error={data.error} busy={data.busy} />
     {row && other && <><Card><PersonRow name={other.display_name} role={"You are the " + commitmentRole(row,data.userId)!.toLowerCase()} />
-      <StatusChip label={statusLabels[row.status]} /><Body>{proposalContext(row,data.userId)}</Body><Body>{formatMoney(row.principal_amount_minor,row.currency)}</Body>
+      <StatusChip label={statusLabels[row.status]} /><Body>{proposalContext(row,data.userId)}</Body><Amount minor={row.principal_amount_minor} currency={row.currency} size="card"/>
       <Body>{row.type === "IOU" ? "IOU" : "Peer loan"}</Body><Body>{row.description || "No description"}</Body><Body supporting>Fides records the commitment. Money moves outside Fides.</Body></Card>
       {data.data?.terms && <TermsView terms={data.data.terms} />}
       {data.data?.installments && <Card title="Installment schedule">{data.data.installments.map(item => <View key={item.id} style={styles.form}>
-        <Body>Installment {item.sequence_no} · {item.due_date}</Body><StatusChip label={item.status.replaceAll("_"," ")} />
-        <Body>Principal: {formatMoney(item.principal_amount_minor,item.currency)}</Body><Body>Interest: {formatMoney(item.interest_amount_minor,item.currency)}</Body><Body>Total due: {formatMoney(item.total_due_minor,item.currency)}</Body>
+        <Body>Installment {item.sequence_no} · {dateOnlyLabel(item.due_date)}</Body><StatusChip label={item.status.replaceAll("_"," ")} />
+        <Body>Principal</Body><Amount minor={item.principal_amount_minor} currency={item.currency} size="row"/><Body>Interest</Body><Amount minor={item.interest_amount_minor} currency={item.currency} size="row"/><Body>Total due</Body><Amount minor={item.total_due_minor} currency={item.currency} size="row"/>
       </View>)}</Card>}
       <ExtensionsSection id={row.id} onRequest={onRequest} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><RepaymentsSection id={row.id} onReport={onReport} onDetail={onRepayment}/><MutualClosureSection id={row.id} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><History key={row.id+":"+revision} id={row.id} onRepayment={onRepayment}/>
       {proposalActions(row,data.userId).map(action => {const pending = data.pending(action); return <Button key={action}
@@ -123,10 +123,10 @@ function CommitmentDetail({ id, onBack, onReport, onRepayment, onRequest }: { id
         <Title>{copy.title}</Title><Body>{copy.body}</Body><Button title="Go back" variant="quiet" onPress={() => setConfirmation(null)} /><Button title={copy.button}
           onPress={() => {const action = confirmation!; setConfirmation(null); void data.action(action);}} /></View></View></Modal>}
     </>}
-  </Screen>;
+  </Screen></KeyboardAvoidingView>;
 }
 const styles = StyleSheet.create({
-  form: {gap:spacing.lg}, choice: {minHeight:controls.button,padding:spacing.md,borderWidth:1,borderColor:colors.border,borderRadius:radii.control},
+  flex: {flex:1}, form: {gap:spacing.lg}, choice: {minHeight:controls.button,padding:spacing.md,borderWidth:1,borderColor:colors.border,borderRadius:radii.control},
   selected: {borderColor:colors.brand.signal}, overlay: {flex:1,backgroundColor:colors.canvas,justifyContent:"center",padding:spacing.lg},
   dialog: {backgroundColor:colors.surface,borderRadius:radii.card,borderWidth:1,borderColor:colors.border,padding:spacing.lg,gap:spacing.lg,width:"100%",maxWidth:640,alignSelf:"center"},
 });

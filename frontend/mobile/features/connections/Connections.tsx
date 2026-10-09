@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from "react-native";
 import { colors, radii, spacing } from "@fides/shared/tokens/index";
 import type { Connection } from "@fides/shared/api/connections";
 import { actionLabel, availableConnectionActions, confirmation, connectionSections, otherParticipant,
@@ -34,7 +34,7 @@ function ConnectionsList({ onNew, onDetail }: { onNew: () => void; onDetail: (id
 }
 function NewConnection({ onBack, onDetail }: { onBack: () => void; onDetail: (id: string) => void }) {
   const data = useConnections(); const [phone, setPhone] = useState("");
-  return <Screen><Button title="Back to Connections" variant="quiet" onPress={onBack} /><Title>Add connection</Title>
+  return <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS==="ios"?"padding":undefined}><Screen><Button title="Back to Connections" variant="quiet" onPress={onBack} /><Title>Add connection</Title>
     <TextField label="Phone number" hint="Use international format, beginning with +." keyboardType="phone-pad"
       autoComplete="off" autoCorrect={false} editable={!data.busy} value={phone} onChangeText={setPhone} />
     <Body supporting>Enter the number of someone you know. Fides does not search your contacts.</Body>
@@ -43,7 +43,7 @@ function NewConnection({ onBack, onDetail }: { onBack: () => void; onDetail: (id
       void data.create(phone).then(row => { if (row) { setPhone(""); onDetail(row.id); } });
     }} />
     {data.uncertain && <Button title="Refresh before retrying" variant="quiet" onPress={() => void data.refresh()} />}
-  </Screen>;
+  </Screen></KeyboardAvoidingView>;
 }
 function ConnectionDetail({ id, onBack, onNew, onCreate }: { id: string; onBack: () => void; onNew: () => void; onCreate: (id: string) => void }) {
   const data = useConnections(id); const [pending, setPending] = useState<ConnectionAction | null>(null);
@@ -79,6 +79,7 @@ function Confirm({ action, row, onCancel, onConfirm }: {
   </Modal>;
 }
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   row: { gap: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderColor: colors.border },
   overlay: { flex: 1, backgroundColor: colors.canvas, justifyContent: "center", padding: spacing.lg },
   dialog: { backgroundColor: colors.surface, borderRadius: radii.card, borderWidth: 1, borderColor: colors.border,

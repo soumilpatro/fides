@@ -77,12 +77,12 @@ export function AuthFlow({ intent }: { intent: AuthIntent }) {
         <Button type="submit" disabled={busy || now < blockedUntil || (step === "phone" ? !phone.trim() || wait > 0 : expired || (step === "otp" ? !/^[0-9]{6}$/.test(code) : !profileReady(name, timezone)))}>{busy ? "Please wait…" : step === "phone" ? "Send verification code" : step === "otp" && intent === "signup" ? "Continue" : "Verify and continue"}</Button>
         {step === "profile" && <Button variant="quiet" disabled={busy} onClick={() => { setCode(""); setStep("otp"); }}>Edit verification code</Button>}
         {step !== "phone" && <>
-          <p className="supporting" role="status">{expired ? "Code expired" : `Valid until ${new Date(challenge!.expires_at).toLocaleTimeString()}`}{wait > 0 ? ` · Resend in ${wait}s` : ""}</p>
+          <p className="supporting">{expired ? "Code expired" : `Valid until ${new Date(challenge!.expires_at).toLocaleTimeString()}`}{wait > 0 ? ` · Resend in ${wait}s` : ""}</p>
           <Button variant="secondary" disabled={busy || wait > 0} onClick={() => void requestCode()}>Resend code</Button>
           <Button variant="quiet" disabled={busy} onClick={() => { generation.current++; setCode(""); setChallenge(null); setStep("phone"); setError(""); }}>Change phone number</Button>
         </>}
-        {step === "phone" && wait > 0 && <p role="status">Try again in {wait}s.</p>}
-        {step !== "phone" && now < blockedUntil && <p role="status">Try again in {Math.ceil((blockedUntil - now) / 1000)}s.</p>}
+        {step === "phone" && wait > 0 && <p>Try again in {wait}s.</p>}
+        {step !== "phone" && now < blockedUntil && <p>Try again in {Math.ceil((blockedUntil - now) / 1000)}s.</p>}
       </form>
       <Link className="auth-back" href="/">Back to welcome</Link>
     </section>

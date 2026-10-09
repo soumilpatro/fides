@@ -33,6 +33,12 @@ h3,
 p {
   margin-top: 0;
 }
+h1,
+h2,
+h3 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
 h1 {
   font-size: var(--type-title);
   line-height: 1.25;
@@ -172,6 +178,7 @@ main {
   gap: var(--space-lg);
 }
 .card {
+  min-width: 0;
   height: 100%;
   padding: var(--space-xl);
   border: 1px solid var(--border);
@@ -183,6 +190,8 @@ main {
 }
 .amount {
   display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: -0.035em;
@@ -211,10 +220,12 @@ main {
 }
 .person {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: var(--space-md);
   padding-block: var(--space-md);
 }
+.person > div { min-width: 0; overflow-wrap: anywhere; }
 .avatar {
   display: inline-flex;
   align-items: center;
@@ -229,6 +240,9 @@ main {
 }
 .chip {
   display: inline-flex;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   border: 1px solid var(--border);
   border-radius: var(--radius-compact);
   padding: var(--space-xs) var(--space-sm);
@@ -263,6 +277,13 @@ main {
   margin-block: var(--space-lg) var(--space-md);
 }
 .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
   min-height: var(--control-height);
   padding: var(--space-compact) var(--space-md);
   border-radius: var(--radius-control);
@@ -482,3 +503,7 @@ main {
 .preference-row .supporting{display:block;font-weight:400}
 .preference-row input[type="checkbox"]{width:24px;height:24px;flex:0 0 auto;accent-color:var(--signal)}
 @media(max-width:45rem){.preference-row{align-items:flex-start}.preference-row input[type="checkbox"]{margin-top:4px}}
+
+.due-summary-section .card{min-width:0}
+.due-summary-name,.due-summary-amount{max-width:100%;overflow-wrap:anywhere;word-break:normal}
+.due-summary-amount{white-space:normal}

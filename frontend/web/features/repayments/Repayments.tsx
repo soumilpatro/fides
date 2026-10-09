@@ -6,11 +6,13 @@ import type { Repayment, RepaymentRequest, DecisionRequest } from "@fides/shared
 import { formatMoney } from "@fides/shared/domain/money";
 import { canReport, canDecide, labels, semantics, reportBody, decisionBody, decisionCopy, type DecisionAction } from "@fides/shared/repayments/model";
 import { statusLabels } from "@fides/shared/commitments/model";
+import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
 import { Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, StatusChip, TextField } from "../../components/ui";
 import { useRepayments } from "./useRepayments";
+import { trapConfirmationFocus } from "../f6-dialog";
 function Feedback({error,busy}:{error:string|null;busy:boolean}) { return <>{error && <ErrorState message={error}/>} {busy && <LoadingState message="Loading the authoritative repayment record…"/>}</>; }
 function Facts({row}:{row:Repayment}) { return <><PersonRow name={row.reported_by.display_name} role="Reported by"/><strong className="amount amount--card">{formatMoney(row.amount_minor,row.currency)}</strong><StatusChip label={labels[row.status]} status={semantics[row.status]}/>
-  <dl className="commitment-facts"><dt>Payment date</dt><dd>{row.payment_date}</dd><dt>Reported at</dt><dd>{row.reported_at}</dd><dt>Note</dt><dd>{row.note || "No note"}</dd></dl>
+  <dl className="commitment-facts"><dt>Payment date</dt><dd>{dateOnlyLabel(row.payment_date)}</dd><dt>Reported at</dt><dd>{row.reported_at}</dd><dt>Note</dt><dd>{row.note || "No note"}</dd></dl>
   {row.status === "PENDING_VERIFICATION" && <p className="supporting">Reported, not yet verified. The other participant still needs to verify or dispute this repayment.</p>}</>; }
 export function RepaymentsSection({id}:{id:string}) {
   const data=useRepayments(id);
@@ -30,7 +32,7 @@ export function ReportRepayment({id}:{id:string}) {
     <Button variant="quiet" disabled={data.busy} onClick={()=>void data.refresh()}>Refresh record</Button>
     {parent && <p>Commitment currency: <strong>{parent.currency}</strong> · {statusLabels[parent.status]}</p>}
     {parent && data.fresh && !canReport(parent,data.userId) && <ErrorState message="This commitment does not currently allow repayment reporting."/>}
-    {body ? <><Card title="Review repayment"><strong className="amount amount--card">{formatMoney(body.amount_minor,body.currency)}</strong><p>Payment date: {body.payment_date}</p><p>Note: {body.note || "No note"}</p>
+    {body ? <><Card title="Review repayment"><strong className="amount amount--card">{formatMoney(body.amount_minor,body.currency)}</strong><p>Payment date: {dateOnlyLabel(body.payment_date)}</p><p>Note: {body.note || "No note"}</p>
       <p>You are reporting this repayment.</p><p>It will remain pending until the other participant verifies or disputes it.</p><p className="supporting">Fides records this repayment. Money moves outside Fides.</p></Card>
       {pending && <p role="status">The earlier attempt may have completed. Its original key and payload are retained; only an explicit same-request retry is allowed after refresh.</p>}
       {!pending && <Button variant="quiet" disabled={data.busy} onClick={()=>setReview(null)}>Edit report</Button>}
@@ -43,8 +45,8 @@ export function ReportRepayment({id}:{id:string}) {
 }
 function Confirmation({action,onCancel,onSubmit}:{action:DecisionAction;onCancel:()=>void;onSubmit:(body:DecisionRequest)=>void}) {
   const dialog=useRef<HTMLDialogElement>(null),[note,setNote]=useState(""),[error,setError]=useState<string|null>(null),copy=decisionCopy(action);
-  useEffect(()=>{dialog.current?.showModal();},[]);
-  return <dialog className="connection-confirm" ref={dialog} aria-labelledby="decision-title" aria-describedby="decision-body" onCancel={onCancel}><h2 id="decision-title">{copy.title}</h2><p id="decision-body">{copy.body}</p><p>{copy.support}</p>
+  useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.showModal();return()=>previous?.focus();},[]);
+  return <dialog tabIndex={-1} className="connection-confirm f6-dialog" ref={dialog} aria-labelledby="decision-title" aria-describedby="decision-body" onKeyDown={trapConfirmationFocus} onCancel={onCancel}><h2 id="decision-title">{copy.title}</h2><p id="decision-body">{copy.body}</p><p>{copy.support}</p>
     <form onSubmit={event=>{event.preventDefault();try{onSubmit(decisionBody(note));}catch(error){setError(error instanceof Error ? error.message : "Check the note.");}}}>
       <label className="field">Note (optional)<textarea value={note} onChange={e=>setNote(e.target.value)} aria-describedby="decision-hint"/><small id="decision-hint">{copy.hint} {Array.from(note.trim()).length}/500</small></label>
       {error && <ErrorState message={error}/>}<div className="button-row"><Button variant="quiet" autoFocus onClick={onCancel}>Go back</Button><Button type="submit" variant={action === "dispute" ? "secondary" : "primary"}>{copy.button}</Button></div></form>

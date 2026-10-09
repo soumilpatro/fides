@@ -15,6 +15,8 @@ import { History } from "../dashboard/Dashboard";
 import { RepaymentsSection } from "../repayments/Repayments";
 import { MutualClosureSection } from "../mutual-closure/MutualClosure";
 import { useAuth } from "../auth/useAuth";
+import { trapConfirmationFocus } from "../f6-dialog";
+import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
 function Feedback({ error, busy }: { error: string | null; busy: boolean }) {
   return <>{error && <ErrorState message={error} />}{busy && <LoadingState message="Loading the authoritative record…" />}</>;
 }
@@ -36,7 +38,7 @@ function Review({ body, name, self }: { body: CommitmentRequest; name: string; s
   return <Card title="Review proposal"><p><strong>{body.actor_role === "BORROWER" ? "You are borrowing from " : "You are lending to "}{name}</strong></p>
     <dl className="commitment-facts"><dt>Borrower</dt><dd>{body.actor_role === "BORROWER" ? self : name}</dd><dt>Lender</dt><dd>{body.actor_role === "LENDER" ? self : name}</dd>
       <dt>Type</dt><dd>{body.type === "IOU" ? "IOU" : "Peer loan"}</dd><dt>Principal</dt><dd>{formatMoney(body.principal_amount_minor, body.currency)}</dd>
-      <dt>Description</dt><dd>{body.description || "No description"}</dd><dt>Schedule</dt><dd>{body.terms.installment_dates ? body.terms.installment_dates.join(", ") : body.terms.due_date ? "Due " + body.terms.due_date : "No deadline"}</dd>
+      <dt>Description</dt><dd>{body.description || "No description"}</dd><dt>Schedule</dt><dd>{body.terms.installment_dates ? body.terms.installment_dates.map(dateOnlyLabel).join(", ") : body.terms.due_date ? "Due " + dateOnlyLabel(body.terms.due_date) : "No deadline"}</dd>
       <dt>Interest</dt><dd>{body.terms.interest_type === "NONE" ? "No interest" : "Simple fixed: " + percentText(body.terms.interest_rate_bps!)}</dd>
       <dt>Grace period</dt><dd>{body.terms.grace_period_days} days</dd></dl>
     <p className="supporting">Fides records the commitment. Money moves outside Fides. Interest totals and installment amounts come from the server after creation.</p>
@@ -88,15 +90,15 @@ export function NewCommitment({ selected = "" }: { selected?: string }) {
 }
 function TermsView({ terms }: { terms: Terms }) {
   const v = currentTerms(terms);
-  return <Card title="Current terms"><p>{scheduleText(v)}</p>{v.installment_dates && <ul>{v.installment_dates.map(date => <li key={date}>{date}</li>)}</ul>}
+  return <Card title="Current terms"><p>{scheduleText(v)}</p>{v.installment_dates && <ul>{v.installment_dates.map(date => <li key={date}>{dateOnlyLabel(date)}</li>)}</ul>}
     <dl className="commitment-facts"><dt>Interest</dt><dd>{v.interest_type === "NONE" ? "No interest" : "Simple fixed: " + percentText(v.interest_rate_bps!)}</dd>
       <dt>Grace period</dt><dd>{v.grace_period_days} days</dd><dt>Due timezone</dt><dd>{v.due_timezone ?? "Timezone not recorded for these legacy terms."}</dd>
       <dt>Version</dt><dd>{v.version_no}</dd></dl></Card>;
 }
 function Confirm({ action, name, onCancel, onConfirm }: { action: ProposalAction; name: string; onCancel: () => void; onConfirm: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null), copy = proposalConfirmation(action,name);
-  useEffect(() => { dialog.current?.showModal(); }, []);
-  return <dialog className="connection-confirm" ref={dialog} aria-labelledby="proposal-confirm-title" aria-describedby="proposal-confirm-body" onCancel={onCancel}>
+  useEffect(() => { const previous=document.activeElement as HTMLElement|null; dialog.current?.showModal(); return()=>previous?.focus(); }, []);
+  return <dialog tabIndex={-1} className="connection-confirm f6-dialog" ref={dialog} aria-labelledby="proposal-confirm-title" aria-describedby="proposal-confirm-body" onKeyDown={trapConfirmationFocus} onCancel={onCancel}>
     <h2 id="proposal-confirm-title">{copy.title}</h2><p id="proposal-confirm-body">{copy.body}</p><div className="button-row"><Button variant="quiet" autoFocus onClick={onCancel}>Go back</Button><Button onClick={onConfirm}>{copy.button}</Button></div></dialog>;
 }
 export function CommitmentDetail({ id }: { id: string }) {
@@ -112,7 +114,7 @@ export function CommitmentDetail({ id }: { id: string }) {
       <p className="supporting">Fides records the commitment. Money moves outside Fides.</p></Card>
       {data.data?.terms && <TermsView terms={data.data.terms} />}
       {data.data?.installments && <Card title="Installment schedule">{data.data.installments.map(item => <div key={item.id} className="installment-display">
-        <h3>Installment {item.sequence_no} · {item.due_date}</h3><StatusChip label={item.status.replaceAll("_"," ")} />
+        <h3>Installment {item.sequence_no} · {dateOnlyLabel(item.due_date)}</h3><StatusChip label={item.status.replaceAll("_"," ")} />
         <dl className="commitment-facts"><dt>Principal</dt><dd>{formatMoney(item.principal_amount_minor,item.currency)}</dd><dt>Interest</dt><dd>{formatMoney(item.interest_amount_minor,item.currency)}</dd><dt>Total due</dt><dd>{formatMoney(item.total_due_minor,item.currency)}</dd></dl></div>)}</Card>}
       <ExtensionsSection id={row.id} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><RepaymentsSection id={row.id}/><MutualClosureSection id={row.id} onChanged={()=>{setRevision(v=>v+1);void data.refresh();}}/><History key={row.id+":"+revision} id={row.id}/>
       <div className="button-row">{proposalActions(row,data.userId).map(action => {
