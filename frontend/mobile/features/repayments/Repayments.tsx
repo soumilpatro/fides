@@ -8,7 +8,7 @@ import { statusLabels } from "@fides/shared/commitments/model";
 import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
 import { Amount, Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Screen, StatusChip, TextField, Title } from "../../components/ui";
 import { useRepayments } from "./useRepayments";
-function Feedback({error,busy}:{error:string|null;busy:boolean}) {return <>{error && <ErrorState message={error}/>} {busy && <LoadingState message="Loading the authoritative repayment record…"/>}</>;}
+function Feedback({error,busy}:{error:string|null;busy:boolean}) {return <>{error && <ErrorState message={error}/>}{busy && <LoadingState message="Loading the authoritative repayment record…"/>}</>;}
 function Facts({row}:{row:Repayment}) {return <><PersonRow name={row.reported_by.display_name} role="Reported by"/><Amount minor={row.amount_minor} currency={row.currency} size="card"/><StatusChip label={labels[row.status]} status={semantics[row.status]}/>
   <Body>Payment date: {dateOnlyLabel(row.payment_date)}</Body><Body supporting>Reported at: {row.reported_at}</Body><Body>Note: {row.note || "No note"}</Body>
   {row.status === "PENDING_VERIFICATION" && <Body supporting>Reported, not yet verified. The other participant still needs to verify or dispute this repayment.</Body>}</>;}
