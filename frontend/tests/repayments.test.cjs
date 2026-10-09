@@ -55,3 +55,58 @@ for(const platform of ['web','mobile']){
  test(platform+' unrelated current principal cannot render snapshot',async()=>{const h=harness(platform);h.env.state.user.id=C;h.render();await settle();assert.equal(h.render().data,null);assert.ok(h.render().error);});
  test(platform+' changed report payload cannot replace ambiguous original',async()=>{const h=harness(platform,true);h.render();await settle();h.repayments.reportRepayment=async()=>{h.calls.writes++;throw new ApiError('NETWORK_ERROR','safe',null);};await h.render().report(body());await h.render().report({...body(),amount_minor:200});assert.equal(h.calls.writes,1);});
 }
+
+// Exercise the actual TSX and shared mobile UI with native host primitives only
+// stubbed. Reject raw text under View/ScrollView, including JSX whitespace and 0.
+const React=require('react');
+function nativeText(node,inText=false,text=[]){
+ if(node===null||node===undefined||typeof node==='boolean'||node==='')return text;
+ if(Array.isArray(node)){node.forEach(child=>nativeText(child,inText,text));return text;}
+ if(typeof node==='string'||typeof node==='number'){
+  assert.ok(inText,'Text strings must be rendered within a <Text> component: '+JSON.stringify(node));
+  text.push(String(node));return text;
+ }
+ if(typeof node.type==='function')return nativeText(node.type(node.props),inText,text);
+ return nativeText(node.props.children,inText||node.type==='Text',text);
+}
+function mobileComponent(feature,name,hooks,props={},stateOverrides={}){
+ const oldLoad=Module._load,oldTsx=require.extensions['.tsx'];let stateIndex=0;
+ const hosts=Object.fromEntries(['ActivityIndicator','Pressable','ScrollView','Text','TextInput','View','KeyboardAvoidingView','Modal','Switch'].map(name=>[name,name]));
+ const react={...React,useId:()=> 'native-test-field',useState(initial){const index=stateIndex++;return[Object.hasOwn(stateOverrides,index)?stateOverrides[index]:typeof initial==='function'?initial():initial,()=>{}];}};
+ require.extensions['.tsx']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,f);
+ Module._load=function(request,parent,main){
+  if(request==='react')return react;
+  if(request==='react-native')return{...hosts,StyleSheet:{create:value=>value},Platform:{OS:'ios'}};
+  if(Object.hasOwn(hooks,request))return hooks[request];
+  return oldLoad.call(this,request.startsWith('@fides/shared/')?path.join(__dirname,'../shared',request.slice(14)+'.ts'):request,parent,main);
+ };
+ const file=path.join(__dirname,'../mobile/features',feature,(feature==='repayments'?'Repayments':name)+'.tsx'),ui=path.join(__dirname,'../mobile/components/ui/index.tsx');
+ try{delete require.cache[file];delete require.cache[ui];return nativeText(require(file)[name](props));}
+ finally{Module._load=oldLoad;if(oldTsx)require.extensions['.tsx']=oldTsx;else delete require.extensions['.tsx'];delete require.cache[file];delete require.cache[ui];}
+}
+test('MOBILE-QA-001 native text guard rejects whitespace and zero outside Text',()=>{
+ for(const value of [' ',0])assert.throws(()=>nativeText(React.createElement('View',null,value)),/within a <Text>/);
+ assert.deepEqual(nativeText(React.createElement('Text',null,' ',0)),[' ','0']);
+});
+for(const [label,busy,error,rows,fresh,status] of [
+ ['loading',true,null,null,false,'ACTIVE'],['error',false,'Unavailable resource.',null,false,'ACTIVE'],
+ ['loading with error',true,'Unavailable resource.',null,false,'ACTIVE'],['empty',false,null,[],true,'ACTIVE'],
+ ['loaded',false,null,[row()],true,'ACTIVE'],['stale',false,null,[row()],false,'ACTIVE'],
+ ['closed',false,null,[],true,'CLOSED'],
+])test('MOBILE-QA-001 repayment section '+label+' has no unwrapped native text',()=>{
+ const snapshot={busy,error,fresh,userId:A,data:rows===null?null:{parent:parent(status),rows},refresh:async()=>{}};
+ const text=mobileComponent('repayments','RepaymentsSection',{'./useRepayments':{useRepayments:()=>snapshot}},{id:PID,onReport:()=>{},onDetail:()=>{}});
+ assert.ok(text.includes('Repayments'));assert.equal(text.includes('Report repayment'),fresh&&rows!==null&&status==='ACTIVE');
+ if(error)assert.ok(text.includes(error));
+ if(rows?.length)assert.ok(text.includes('Payment date: '));
+});
+for(const busy of [false,true])test('MOBILE-QA-001 notifications '+(busy?'loading':'empty')+' has no unwrapped native text',()=>{
+ const snapshot={busy,error:null,data:busy?null:{items:[],next_cursor:null},refresh:async()=>{}};
+ assert.ok(mobileComponent('notifications','Notifications',{'./useNotifications':{useNotifications:()=>snapshot}},{onOpen:()=>{}}).includes('Notifications'));
+});
+for(const deactivating of [false,true])test('MOBILE-QA-001 profile '+(deactivating?'deactivation':'settings')+' has no unwrapped native text',()=>{
+ const profile={user:{display_name:'Alex',phone_e164:'+12025550101',timezone:'Etc/UTC'},busy:false,error:null,saved:true,blocked:false};
+ const preferences={data:{due_reminders_enabled:true,overdue_reminders_enabled:false},busy:false,saved:false,error:null};
+ const text=mobileComponent('profile','Profile',{'./useProfile':{useProfile:()=>profile},'./useNotificationPreferences':{useNotificationPreferences:()=>preferences}},{onCommitments:()=>{}},{3:deactivating});
+ assert.ok(text.includes(deactivating?'Deactivate account?':'Profile / Settings'));
+});
