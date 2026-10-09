@@ -26,6 +26,15 @@ export function notificationText(r:Notification){
  if(!r.actor)throw new Error("Workflow notification requires an actor.");
  return r.actor.display_name+" "+workflowCopy[r.type];
 }
+/** Format the original instant in the saved account timezone, never device time. */
+export function notificationTimestamp(value:string,timeZone:string){
+ return new Intl.DateTimeFormat("en-GB",{timeZone,day:"numeric",month:"short",year:"numeric",
+  hour:"numeric",minute:"2-digit",hour12:true}).format(new Date(value))
+  .replace(/\b(am|pm)\b/g,period=>period.toUpperCase());
+}
+export function notificationActionLabel(r:Notification){
+ return (r.read_at?"Read. ":"Unread. ")+notificationText(r)+" Open record.";
+}
 export function notificationTarget(r:Notification){
  return r.type.startsWith("REPAYMENT_")&&r.repayment_id
   ?{page:"repayment" as const,id:r.repayment_id,parent:r.commitment_id}
