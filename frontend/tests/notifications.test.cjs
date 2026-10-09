@@ -1,5 +1,69 @@
 const {A,B,ID,E,notification,harness,settle}=require('./f6-harness.cjs'),test=require('node:test'),assert=require('node:assert/strict');
 const {createNotificationsApi,notificationResponse,notificationTypes,reminderNotificationTypes}=require('../shared/api/notifications.ts'),{notificationText,notificationTarget,appendNotifications}=require('../shared/notifications/presentation.ts'),{isAllowedApiRoute,isAllowedApiQuery}=require('../shared/api/relay.ts');
+const {notificationTimestamp,notificationActionLabel}=require('../shared/notifications/presentation.ts');
+
+const instant='2026-10-04T15:16:03.006520Z';
+for(const [zone,expected] of [['UTC','4 Oct 2026, 3:16 PM'],['Asia/Kolkata','4 Oct 2026, 8:46 PM'],['America/New_York','4 Oct 2026, 11:16 AM']])
+ test('notification instant in saved timezone '+zone,()=>assert.equal(notificationTimestamp(instant,zone),expected));
+for(const [value,expected] of [
+ ['2026-03-08T06:59:00Z','8 Mar 2026, 1:59 AM'],['2026-03-08T07:01:00Z','8 Mar 2026, 3:01 AM'],
+ ['2026-11-01T05:30:00Z','1 Nov 2026, 1:30 AM'],['2026-11-01T06:30:00Z','1 Nov 2026, 1:30 AM'],
+])test('notification New York DST transition '+value,()=>assert.equal(notificationTimestamp(value,'America/New_York'),expected));
+test('notification timestamp preserves date rollover, offset and original microseconds',()=>{
+ const record=notification();record.created_at=instant;const before=JSON.stringify(record);
+ assert.equal(notificationTimestamp('2026-10-04T23:30:00Z','Asia/Kolkata'),'5 Oct 2026, 5:00 AM');
+ assert.equal(notificationTimestamp('2026-10-04T20:46:03.006520+05:30','UTC'),notificationTimestamp(instant,'UTC'));
+ notificationTimestamp(record.created_at,'Asia/Kolkata');assert.equal(JSON.stringify(record),before);
+});
+test('notification timestamp never substitutes the device timezone or an invalid saved timezone',()=>{
+ const old=process.env.TZ;
+ try{for(const device of ['Pacific/Honolulu','Europe/London']){process.env.TZ=device;assert.equal(notificationTimestamp(instant,'Asia/Kolkata'),'4 Oct 2026, 8:46 PM');}}
+ finally{if(old===undefined)delete process.env.TZ;else process.env.TZ=old;}
+ assert.throws(()=>notificationTimestamp(instant,'Invalid/Timezone'),RangeError);
+});
+for(const read of [false,true])test('notification accessible actions retain '+(read?'read':'unread')+' and record context',()=>{
+ for(const type of notificationTypes){const record={...notification(type),read_at:read?instant:null};assert.equal(notificationActionLabel(record),(read?'Read. ':'Unread. ')+notificationText(record)+' Open record.');}
+});
+
+// Render actual notification TSX/UI; stub only native hosts, auth/data and routing.
+function notificationView(platform,record,timezone){
+ const fs=require('node:fs'),path=require('node:path'),ts=require('typescript'),Module=require('node:module'),React=require('react');
+ const load=Module._load,tsx=require.extensions['.tsx'],file=path.join(__dirname,'../'+platform+'/features/notifications/Notifications.tsx'),ui=path.join(__dirname,'../'+platform+'/components/ui/index.tsx');
+ const calls={read:[],opened:[]},state=timezone?{status:'authenticated',user:{timezone}}:{status:'anonymous'};
+ const snapshot={data:{items:[record],next_cursor:null},busy:false,error:null,activate:async row=>calls.read.push(row.id),refresh:async()=>{}};
+ require.extensions['.tsx']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,f);
+ Module._load=function(request,parent,main){
+  if(request==='./useNotifications')return{useNotifications:()=>snapshot};
+  if(request==='../auth/useAuth')return{useAuth:()=>({state})};
+  if(request==='next/navigation')return{useRouter:()=>({push:value=>calls.opened.push(value)})};
+  if(request==='react-native')return{...Object.fromEntries(['View','Text','ScrollView','Pressable','TextInput','ActivityIndicator'].map(name=>[name,name])),StyleSheet:{create:value=>value}};
+  return load.call(this,request.startsWith('@fides/shared/')?path.join(__dirname,'../shared',request.slice(14)+'.ts'):request,parent,main);
+ };
+ const nodes=[],texts=[];
+ function render(node,inText=false){
+  if(node===null||node===undefined||typeof node==='boolean')return;
+  if(Array.isArray(node)){node.forEach(value=>render(value,inText));return;}
+  if(typeof node==='string'||typeof node==='number'){if(platform==='mobile'&&node!=='')assert.ok(inText,'Unwrapped native text');texts.push(String(node));return;}
+  if(typeof node.type==='function'){render(node.type(node.props),inText);return;}
+  if(node.type!==React.Fragment)nodes.push(node);
+  render(node.props.children,inText||node.type==='Text');
+ }
+ try{delete require.cache[file];delete require.cache[ui];render(require(file).Notifications({onOpen:value=>calls.opened.push(value)}));return{nodes,texts,calls};}
+ finally{Module._load=load;if(tsx)require.extensions['.tsx']=tsx;else delete require.extensions['.tsx'];delete require.cache[file];delete require.cache[ui];}
+}
+for(const platform of ['web','mobile'])for(const read of [false,true])test(platform+' notification uses saved timezone, accessible action and unchanged navigation ('+(read?'read':'unread')+')',()=>{
+ const record={...notification('REPAYMENT_REPORTED'),actor:{id:B,display_name:'A very long counterparty name '.repeat(15)},created_at:instant,read_at:read?instant:null};
+ const before=JSON.stringify(record),view=notificationView(platform,record,'Asia/Kolkata');
+ assert.ok(view.texts.includes('4 Oct 2026, 8:46 PM'));assert.ok(view.texts.includes(notificationText(record)));assert.ok(view.texts.includes(read?'Read':'Unread'));
+ const action=view.nodes.find(node=>node.props[platform==='web'?'aria-label':'accessibilityLabel']===notificationActionLabel(record));assert.ok(action);
+ action.props[platform==='web'?'onClick':'onPress']();assert.deepEqual(view.calls.read,[record.id]);
+ assert.deepEqual(view.calls.opened,[platform==='web'?'/app/repayments/'+A:notificationTarget(record)]);
+ if(platform==='web'){assert.equal(view.nodes.find(node=>node.type==='time').props.dateTime,instant);assert.ok(view.nodes.some(node=>node.props.className==='f6-wrap'));}
+ else{const label=view.nodes.find(node=>node.type==='Text'&&node.props.children===notificationText(record));assert.equal(label.props.style[0].flexShrink,1);assert.equal(label.props.style[0].maxWidth,'100%');}
+ assert.equal(JSON.stringify(record),before);
+ const utc=notificationView(platform,record,'UTC');assert.ok(utc.texts.includes('4 Oct 2026, 3:16 PM'));
+});
+for(const platform of ['web','mobile'])test(platform+' unresolved auth cannot render notification times using device timezone',()=>assert.deepEqual(notificationView(platform,notification(),null).texts,[]));
 
 for(const type of notificationTypes)test('closed '+type+' projection/copy/target',()=>{
  const r=notification(type);

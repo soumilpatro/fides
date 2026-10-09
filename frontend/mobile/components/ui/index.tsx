@@ -52,11 +52,13 @@ export function Micro({ children }: { children: ReactNode }) {
 }
 export function Button({
   title,
+  accessibilityLabel = title,
   onPress,
   variant = "primary",
   disabled = false,
 }: {
   title: string;
+  accessibilityLabel?: string;
   onPress: () => void;
   variant?: "primary" | "secondary" | "quiet" | "destructive";
   disabled?: boolean;
@@ -64,6 +66,7 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}

@@ -102,7 +102,7 @@ for(const [label,busy,error,rows,fresh,status] of [
 });
 for(const busy of [false,true])test('MOBILE-QA-001 notifications '+(busy?'loading':'empty')+' has no unwrapped native text',()=>{
  const snapshot={busy,error:null,data:busy?null:{items:[],next_cursor:null},refresh:async()=>{}};
- assert.ok(mobileComponent('notifications','Notifications',{'./useNotifications':{useNotifications:()=>snapshot}},{onOpen:()=>{}}).includes('Notifications'));
+ assert.ok(mobileComponent('notifications','Notifications',{'./useNotifications':{useNotifications:()=>snapshot},'../auth/useAuth':{useAuth:()=>({state:{status:'authenticated',user:{timezone:'Etc/UTC'}}})}},{onOpen:()=>{}}).includes('Notifications'));
 });
 for(const deactivating of [false,true])test('MOBILE-QA-001 profile '+(deactivating?'deactivation':'settings')+' has no unwrapped native text',()=>{
  const profile={user:{display_name:'Alex',phone_e164:'+12025550101',timezone:'Etc/UTC'},busy:false,error:null,saved:true,blocked:false};
