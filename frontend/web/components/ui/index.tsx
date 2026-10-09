@@ -82,7 +82,7 @@ export function PersonRow({ name, role }: { name: string; role: string }) {
       <Avatar name={name} />
       <div>
         <strong>{name}</strong>
-        <div className="supporting">{role}</div>
+        {role && <div className="supporting">{role}</div>}
       </div>
     </div>
   );

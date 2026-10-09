@@ -28,9 +28,9 @@ export function CommitmentsList({dashboard=false}:{dashboard?:boolean}) {
     <Feedback error={data.error} busy={data.busy} />
     {data.data?.rows.length === 0 && <EmptyState title="No commitments yet" message="Create a shared record with someone you're connected to." />}
     {data.data?.rows.map(row => <Card key={row.id}><PersonRow name={counterparty(row, data.userId)!.display_name} role={"You are the " + commitmentRole(row, data.userId)!.toLowerCase()} />
-      <div className="commitment-row"><strong className="amount amount--row">{formatMoney(row.principal_amount_minor, row.currency)}</strong>
+      <div className="commitment-row"><strong className="amount amount--card">{formatMoney(row.principal_amount_minor, row.currency)}</strong>
         <span>{row.type === "IOU" ? "IOU" : "Peer loan"}</span><StatusChip label={statusLabels[row.status]} /></div>
-      <p>{proposalContext(row, data.userId)}</p>{row.description && <p>{row.description}</p>}
+      {row.status === "PENDING_CONFIRMATION" && <p>{proposalContext(row, data.userId)}</p>}{row.description && <p>{row.description}</p>}
       <Link className="button button--quiet" href={"/app/commitments/" + row.id}>View commitment with {counterparty(row, data.userId)!.display_name}</Link>
     </Card>)}</div>;
 }
@@ -108,7 +108,7 @@ export function CommitmentDetail({ id }: { id: string }) {
   return <div className="commitments-feature"><Link className="auth-back" href="/app/overview">← Commitments</Link><h1>Commitment detail</h1>
     <Button variant="quiet" disabled={data.busy} onClick={() => void data.refresh()}>Refresh commitment</Button><Feedback busy={data.busy} error={data.error} />
     {row && other && <><Card><PersonRow name={other.display_name} role={"You are the " + commitmentRole(row,data.userId)!.toLowerCase()} />
-      <StatusChip label={statusLabels[row.status]} /><p>{proposalContext(row,data.userId)}</p>
+      <StatusChip label={statusLabels[row.status]} />{row.status === "PENDING_CONFIRMATION" && <p>{proposalContext(row,data.userId)}</p>}
       <strong className="amount amount--card">{formatMoney(row.principal_amount_minor,row.currency)}</strong>
       <p>{row.type === "IOU" ? "IOU" : "Peer loan"}</p><p>{row.description || "No description"}</p>
       <p className="supporting">Fides records the commitment. Money moves outside Fides.</p></Card>
