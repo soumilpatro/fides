@@ -6,6 +6,9 @@ import { canRequestMutualClosure, closureStatusLabel, hasPendingRepayment, mutua
 import { Button, Card, EmptyState, ErrorState, LoadingState, StatusChip } from "../../components/ui";
 import { trapConfirmationFocus } from "../f6-dialog";
 import { useMutualClosure } from "./useMutualClosure";
+import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
+import { useAuth } from "../auth/useAuth";
+import { notificationTimestamp as formatTimestamp } from "@fides/shared/notifications/presentation";
 
 function Confirmation({row,action,onCancel,onConfirm}:{row:MutualClosure;action:"accept"|"reject"|"cancel";onCancel:()=>void;onConfirm:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null);
@@ -24,6 +27,8 @@ export function MutualClosureSection({id,onChanged}:{id:string;onChanged:()=>voi
  const data=useMutualClosure(id),[requesting,setRequesting]=useState(false),[note,setNote]=useState(""),[validation,setValidation]=useState<string|null>(null),[confirmation,setConfirmation]=useState<{row:MutualClosure;action:"accept"|"reject"|"cancel"}|null>(null);
  const snapshot=data.data,verified=snapshot?verifiedRepayments(snapshot.repayments):[],pendingVerification=snapshot?hasPendingRepayment(snapshot.repayments):false;
  const createPending=data.pending("create");
+ const {state}=useAuth();
+ if(state.status!=="authenticated")return null;
  return <section id="mutual-closure" className="f6-stack" aria-labelledby="mutual-closure-title">
   <h2 id="mutual-closure-title">Mutual closure</h2>
   <p className="supporting">Mutual closure is not repayment or unilateral forgiveness. Both people must agree before the commitment can close.</p>
@@ -31,7 +36,7 @@ export function MutualClosureSection({id,onChanged}:{id:string;onChanged:()=>voi
   {data.busy&&!snapshot&&<LoadingState message="Loading mutual-closure status…"/>}{data.error&&<ErrorState message={data.error}/>}
   {snapshot&&<>
    <Card title="Verified repayments">
-    {verified.length===0?<p>No verified repayments recorded.</p>:<ul className="history-list">{verified.map(row=><li key={row.id}><span className="amount amount--row">{formatMoney(row.amount_minor,row.currency)}</span><span> · {row.payment_date} · reported by {row.reported_by.display_name}</span></li>)}</ul>}
+    {verified.length===0?<p>No verified repayments recorded.</p>:<ul className="history-list">{verified.map(row=><li key={row.id}><span className="amount amount--row">{formatMoney(row.amount_minor,row.currency)}</span><span> · {dateOnlyLabel(row.payment_date)} · reported by {row.reported_by.display_name}</span></li>)}</ul>}
     <p className="supporting">Only verified repayments are shown here. Fides does not turn a waiver into a repayment entry.</p>
    </Card>
    {canRequestMutualClosure(snapshot.parent,snapshot.rows)&&!requesting&&!createPending&&<Button onClick={()=>{setNote("");setValidation(null);setRequesting(true);}}>Request mutual closure</Button>}
@@ -52,7 +57,7 @@ export function MutualClosureSection({id,onChanged}:{id:string;onChanged:()=>voi
     <dl className="commitment-facts"><dt>{row.status==="ACCEPTED"?"Verified outstanding at closure":"Verified outstanding reviewed"}</dt><dd className="amount">{formatMoney(row.outstanding_snapshot_minor,row.currency)}</dd>
     <dt>{row.status==="ACCEPTED"?"Waived amount":"Amount proposed to be waived"}</dt><dd className="amount">{formatMoney(row.waived_amount_minor,row.currency)}</dd></dl>
     {row.note&&<p className="f6-wrap">{row.note}</p>}
-    {row.decided_by&&<p>{row.decided_by.display_name} · <time dateTime={row.decided_at!}>{row.decided_at}</time></p>}
+    {row.decided_by&&<p>{row.decided_by.display_name} · <time dateTime={row.decided_at!}>{formatTimestamp(row.decided_at!,state.user.timezone)}</time></p>}
     {row.status==="ACCEPTED"&&<p><strong>Closed by mutual agreement</strong></p>}
     {row.status==="REQUESTED"&&row.counterparty.id===data.user&&pendingVerification&&<p role="status">A repayment is pending verification. Resolve it before accepting mutual closure.</p>}
     <div className="button-row">{mutualClosureActions(row,data.user).map(action=>{const pending=data.pending(action,row.id),blockedByVerification=action==="accept"&&pendingVerification;return <Button key={action} variant={action==="accept"?"primary":"secondary"} disabled={data.busy||blockedByVerification||!!pending?.blocked||!!pending?.needsReconcile} onClick={()=>setConfirmation({row,action})}>{pending?"Retry same "+action:action==="accept"?"Accept":action==="reject"?"Reject":"Cancel request"}</Button>;})}</div>

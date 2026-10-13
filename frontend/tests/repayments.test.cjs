@@ -78,6 +78,7 @@ function mobileComponent(feature,name,hooks,props={},stateOverrides={}){
   if(request==='react')return react;
   if(request==='react-native')return{...hosts,StyleSheet:{create:value=>value},Platform:{OS:'ios'}};
   if(Object.hasOwn(hooks,request))return hooks[request];
+  if(request==='../auth/useAuth')return {useAuth:()=>({state:{status:'authenticated',user:{timezone:'Etc/UTC'}}})};
   return oldLoad.call(this,request.startsWith('@fides/shared/')?path.join(__dirname,'../shared',request.slice(14)+'.ts'):request,parent,main);
  };
  const file=path.join(__dirname,'../mobile/features',feature,(feature==='repayments'?'Repayments':name)+'.tsx'),ui=path.join(__dirname,'../mobile/components/ui/index.tsx');
@@ -109,4 +110,61 @@ for(const deactivating of [false,true])test('MOBILE-QA-001 profile '+(deactivati
  const preferences={data:{due_reminders_enabled:true,overdue_reminders_enabled:false},busy:false,saved:false,error:null};
  const text=mobileComponent('profile','Profile',{'./useProfile':{useProfile:()=>profile},'./useNotificationPreferences':{useNotificationPreferences:()=>preferences}},{onCommitments:()=>{}},{3:deactivating});
  assert.ok(text.includes(deactivating?'Deactivate account?':'Profile / Settings'));
+});
+
+// Final date polish: render real web/mobile components with controlled account/data hooks.
+function datePolishView(platform,feature,component,zone,instant='2026-10-04T15:16:03.006520Z',confirm){
+ const reactBase=require('react'),oldLoad=Module._load,oldTsx=require.extensions['.tsx'];let index=0;
+ const payment={...row('VERIFIED'),payment_date:'2026-10-04',reported_at:instant},decision={...history(),decided_at:instant};
+ const closure={id:C,commitment_id:PID,requested_by:person(A),counterparty:person(B),status:'ACCEPTED',currency:'INR',outstanding_snapshot_minor:900,waived_amount_minor:900,note:null,decided_by:person(B),decided_at:instant,created_at:instant,updated_at:instant};
+ const ext={id:C,commitment_id:PID,requested_by:person(A),status:confirm?'REQUESTED':'ACCEPTED',previous_due_date:'2026-10-04',requested_due_date:'2026-11-04',reason:null,decided_by:confirm?null:person(B),decided_at:confirm?null:instant,created_at:instant};
+ const terms={current_terms_version_id:ID,versions:[{id:ID,schedule_mode:'single',due_date:'2026-10-04'}]};
+ const snapshot=feature==='repayments'?{userId:B,fresh:true,data:{parent:parent(),rows:[payment],detail:payment,history:[decision]}}:
+  feature==='mutual-closure'?{user:B,data:{parent:parent('CLOSED'),rows:[closure],repayments:[payment]}}:{user:B,data:{parent:parent(),rows:[ext],terms}};
+ Object.assign(snapshot,{busy:false,error:null,pending:()=>null,refresh:async()=>{},actionBlocked:()=>false});
+ const before=JSON.stringify(snapshot.data),calls=[];
+ const react={...reactBase,useId:()=> 'date-test-field',useEffect:()=>{},useRef:()=>({current:null}),useState(initial){const slot=index++;return[confirm&&slot===0?{row:ext,action:confirm}:typeof initial==='function'?initial():initial,()=>{}];}};
+ const name=feature==='repayments'?'Repayments':feature==='mutual-closure'?'MutualClosure':'Extensions',file=path.join(__dirname,'../'+platform+'/features/'+feature+'/'+name+'.tsx'),ui=path.join(__dirname,'../'+platform+'/components/ui/index.tsx');
+ require.extensions['.tsx']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,f);
+ Module._load=function(request,parent,main){
+  if(request==='react')return react;
+  if(request==='../auth/useAuth')return{useAuth:()=>({state:{status:'authenticated',user:{id:B,timezone:zone}}})};
+  if(['./useRepayments','./useMutualClosure','./useExtensions'].includes(request))return{[request.slice(2)]:()=>snapshot};
+  if(request==='next/link')return{__esModule:true,default:({children,...props})=>react.createElement('a',props,children)};
+  if(request==='next/navigation')return{useRouter:()=>({push:id=>calls.push(id)})};
+  if(request==='react-native')return{...Object.fromEntries(['View','Text','ScrollView','Pressable','TextInput','ActivityIndicator','KeyboardAvoidingView','Modal'].map(n=>[n,n])),StyleSheet:{create:v=>v},Platform:{OS:'ios'}};
+  return oldLoad.call(this,request.startsWith('@fides/shared/')?path.join(__dirname,'../shared',request.slice(14)+'.ts'):request,parent,main);
+ };
+ const nodes=[],texts=[];
+ function render(node,inText=false){
+  if(node===null||node===undefined||typeof node==='boolean')return node;
+  if(Array.isArray(node))return node.map(n=>render(n,inText));
+  if(typeof node==='string'||typeof node==='number'){if(platform==='mobile'&&node!=='')assert.ok(inText,'Unwrapped native text');texts.push(String(node));return node;}
+  if(typeof node.type==='function')return render(node.type(node.props),inText);
+  if(node.type!==react.Fragment)nodes.push(node);
+  return react.createElement(node.type,{...node.props,key:node.key},render(node.props.children,inText||node.type==='Text'));
+ }
+ try{delete require.cache[file];delete require.cache[ui];const resolved=render(require(file)[component]({id:PID,onChanged:()=>{},onRequest:()=>{},onReport:()=>{},onDetail:id=>calls.push(id),onBack:()=>{}}));assert.equal(JSON.stringify(snapshot.data),before);return{nodes,texts,calls,payment,decision,closure,ext,resolved};}
+ finally{Module._load=oldLoad;if(oldTsx)require.extensions['.tsx']=oldTsx;else delete require.extensions['.tsx'];delete require.cache[file];delete require.cache[ui];}
+}
+for(const platform of ['web','mobile'])for(const [zone,label] of [['UTC','4 Oct 2026, 3:16 PM'],['Asia/Kolkata','4 Oct 2026, 8:46 PM'],['America/New_York','4 Oct 2026, 11:16 AM']])for(const [feature,component] of [['repayments','RepaymentsSection'],['repayments','RepaymentDetail'],['mutual-closure','MutualClosureSection'],['extensions','ExtensionsSection']])test(platform+' '+component+' formats original instant in account '+zone,()=>{
+ const view=datePolishView(platform,feature,component,zone),text=view.texts.join('');assert.ok(text.includes(label));assert.ok(!text.includes('2026-10-04T15:16:03.006520Z'));
+ if(feature==='repayments'||feature==='mutual-closure')assert.ok(text.includes('4 Oct 2026'));assert.ok(!text.includes('2026-10-04'));
+ if(feature==='repayments'&&component==='RepaymentsSection'){
+  if(platform==='web'){const link=view.nodes.find(n=>n.type==='a'&&n.props.href==='/app/repayments/'+ID);assert.equal(link.props.href,'/app/repayments/'+ID);assert.ok(link.props.children.includes('4 Oct 2026'));}
+  else{const button=view.nodes.find(n=>n.type==='Pressable'&&n.props.accessibilityLabel?.startsWith('View repayment reported by'));assert.ok(button);button.props.onPress();assert.deepEqual(view.calls,[ID]);}
+ }
+ if(platform==='web'){const stamps=view.nodes.filter(n=>n.type==='time');assert.ok(stamps.length);assert.ok(stamps.every(n=>n.props.dateTime==='2026-10-04T15:16:03.006520Z'));}
+});
+for(const platform of ['web','mobile'])for(const [instant,label] of [['2026-03-08T06:59:00Z','8 Mar 2026, 1:59 AM'],['2026-03-08T07:01:00Z','8 Mar 2026, 3:01 AM']])test(platform+' verification history preserves DST instant '+instant,()=>assert.ok(datePolishView(platform,'repayments','RepaymentDetail','America/New_York',instant).texts.join('').includes(label)));
+for(const platform of ['web','mobile'])for(const action of ['accept','reject'])test(platform+' extension '+action+' list and confirmation keep established emphasis',()=>{
+ const view=datePolishView(platform,'extensions','ExtensionsSection','UTC',undefined,action),label=action==='accept'?'Accept extension':'Reject extension';
+ const buttons=view.nodes.filter(n=>platform==='web'?n.type==='button'&&n.props.children===label:n.type==='Pressable'&&n.props.accessibilityLabel===label);
+ assert.equal(buttons.length,2);
+ for(const button of buttons)if(platform==='web')assert.ok(button.props.className.includes('button--'+(action==='accept'?'primary':'secondary')));else assert.equal(button.props.style[1].backgroundColor,action==='accept'?require('../shared/tokens/colors.ts').colors.brand.signal:undefined);
+});
+test('payment date presentation stays a calendar date across timezone/date boundaries',()=>{
+ const {dateOnlyLabel}=require('../shared/dashboard/due-presentation.ts'),old=process.env.TZ;
+ try{for(const zone of ['UTC','Asia/Kolkata','America/New_York','Pacific/Honolulu']){process.env.TZ=zone;assert.equal(dateOnlyLabel('2028-02-29'),'29 Feb 2028');assert.equal(dateOnlyLabel('2026-01-01'),'1 Jan 2026');}}
+ finally{if(old===undefined)delete process.env.TZ;else process.env.TZ=old;}
 });
