@@ -7,6 +7,8 @@ import type { Extension, ExtensionRequest } from "@fides/shared/api/extensions";
 import { canRequestExtension, extensionActions, extensionBody } from "@fides/shared/extensions/model";
 import { Button, Card, EmptyState, ErrorState, LoadingState, StatusChip, TextField } from "../../components/ui";
 import { useExtensions } from "./useExtensions";
+import { useAuth } from "../auth/useAuth";
+import { notificationTimestamp as formatTimestamp } from "@fides/shared/notifications/presentation";
 import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
 function Confirmation({row,action,onCancel,onConfirm}:{row:Extension;action:"accept"|"reject";onCancel:()=>void;onConfirm:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null);
@@ -14,10 +16,12 @@ function Confirmation({row,action,onCancel,onConfirm}:{row:Extension;action:"acc
  return <dialog tabIndex={-1} onKeyDown={trapConfirmationFocus} className="connection-confirm f6-dialog" ref={dialog} aria-labelledby="extension-confirm-title" aria-describedby="extension-confirm-body" onCancel={onCancel}>
  <h2 id="extension-confirm-title">{action==="accept"?"Accept this extension?":"Reject this extension?"}</h2>
  <p id="extension-confirm-body">{action==="accept"?"The commitment due date will change from "+dateOnlyLabel(row.previous_due_date)+" to "+dateOnlyLabel(row.requested_due_date)+".":"The current due date will remain unchanged."}</p>
- <div className="button-row"><Button variant="quiet" autoFocus onClick={onCancel}>Go back</Button><Button onClick={onConfirm}>{action==="accept"?"Accept extension":"Reject extension"}</Button></div></dialog>;
+ <div className="button-row"><Button variant="quiet" autoFocus onClick={onCancel}>Go back</Button><Button variant={action==="accept"?"primary":"secondary"} onClick={onConfirm}>{action==="accept"?"Accept extension":"Reject extension"}</Button></div></dialog>;
 }
 export function ExtensionsSection({id,onChanged}:{id:string;onChanged:()=>void}){
  const data=useExtensions(id),[confirmation,setConfirmation]=useState<{row:Extension;action:"accept"|"reject"}|null>(null);
+ const {state}=useAuth();
+ if(state.status!=="authenticated")return null;
  return <section id="due-date-extension" className="f6-stack" aria-labelledby="extensions-title"><h2 id="extensions-title">Due-date extension</h2>
  <Button variant="quiet" disabled={data.busy} onClick={()=>void data.refresh()}>Refresh extensions</Button>
  {data.busy&&<LoadingState message="Loading due-date requests…"/>}{data.error&&<ErrorState message={data.error}/>}
@@ -26,10 +30,10 @@ export function ExtensionsSection({id,onChanged}:{id:string;onChanged:()=>void})
  {!data.data.rows.length&&<EmptyState title="No extension requests" message="A due-date change needs the other participant's acceptance."/>}
  {data.data.rows.map(row=><Card key={row.id}><StatusChip label={row.status==="REQUESTED"&&row.requested_by.id===data.user?"Awaiting response":row.status==="REQUESTED"?"Requested":row.status.charAt(0)+row.status.slice(1).toLowerCase()} status={row.status==="REQUESTED"?"PENDING":undefined}/>
  <p>Requested by {row.requested_by.display_name}</p><dl className="commitment-facts"><dt>Previous due date</dt><dd>{dateOnlyLabel(row.previous_due_date)}</dd><dt>{row.status==="ACCEPTED"?"Accepted due date":"Requested due date"}</dt><dd>{dateOnlyLabel(row.requested_due_date)}</dd></dl>
- {row.reason&&<p className="f6-wrap">{row.reason}</p>}{row.decided_by&&<p>{row.decided_by.display_name} · <time dateTime={row.decided_at!}>{row.decided_at}</time></p>}
+ {row.reason&&<p className="f6-wrap">{row.reason}</p>}{row.decided_by&&<p>{row.decided_by.display_name} · <time dateTime={row.decided_at!}>{formatTimestamp(row.decided_at!,state.user.timezone)}</time></p>}
  <div className="button-row">{extensionActions(row,data.user,data.data!.parent,data.data!.terms).map(action=>{
  const pending=data.pending(action,row.id),opposite=data.pending(action==="accept"?"reject":"accept",row.id);
- return <Button key={action} disabled={data.busy||!!opposite||!!pending?.blocked||!!pending?.needsReconcile} onClick={()=>setConfirmation({row,action})}>{pending?"Retry same "+action:action==="accept"?"Accept extension":"Reject extension"}</Button>;
+ return <Button key={action} variant={action==="accept"?"primary":"secondary"} disabled={data.busy||!!opposite||!!pending?.blocked||!!pending?.needsReconcile} onClick={()=>setConfirmation({row,action})}>{pending?"Retry same "+action:action==="accept"?"Accept extension":"Reject extension"}</Button>;
  })}</div></Card>)}</>}
  {confirmation&&<Confirmation {...confirmation} onCancel={()=>setConfirmation(null)} onConfirm={()=>{const {row,action}=confirmation;setConfirmation(null);void data.decide(row,action).then(result=>{if(result)onChanged();});}}/>}
  </section>;

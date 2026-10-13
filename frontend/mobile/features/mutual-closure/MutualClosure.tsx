@@ -4,14 +4,19 @@ import { closureBody, type MutualClosure } from "@fides/shared/api/mutual-closur
 import { canRequestMutualClosure, closureStatusLabel, hasPendingRepayment, mutualClosureActions, verifiedRepayments } from "@fides/shared/mutual-closure/model";
 import { Amount, Body, Button, Card, EmptyState, ErrorState, LoadingState, StatusChip, TextField, Title } from "../../components/ui";
 import { useMutualClosure } from "./useMutualClosure";
+import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
+import { useAuth } from "../auth/useAuth";
+import { notificationTimestamp as formatTimestamp } from "@fides/shared/notifications/presentation";
 
 export function MutualClosureSection({id,onChanged}:{id:string;onChanged:()=>void}){
  const data=useMutualClosure(id),[requesting,setRequesting]=useState(false),[note,setNote]=useState(""),[validation,setValidation]=useState<string|null>(null),[confirmation,setConfirmation]=useState<{row:MutualClosure;action:"accept"|"reject"|"cancel"}|null>(null);
  const snapshot=data.data,verified=snapshot?verifiedRepayments(snapshot.repayments):[],pendingVerification=snapshot?hasPendingRepayment(snapshot.repayments):false,createPending=data.pending("create");
+ const {state}=useAuth();
+ if(state.status!=="authenticated")return null;
  return <><Card title="Mutual closure"><Body supporting>Mutual closure is not repayment or unilateral forgiveness. Both people must agree before the commitment can close.</Body><Button title="Refresh mutual closure" variant="quiet" disabled={data.busy} onPress={()=>void data.refresh()}/></Card>
   {data.busy&&!snapshot&&<LoadingState message="Loading mutual-closure status…"/>}{data.error&&<ErrorState message={data.error}/>}
   {snapshot&&<>
-   <Card title="Verified repayments">{verified.length===0?<Body>No verified repayments recorded.</Body>:verified.map(row=><View key={row.id}><Amount minor={row.amount_minor} currency={row.currency} size="row"/><Body supporting>{row.payment_date} · reported by {row.reported_by.display_name}</Body></View>)}<Body supporting>Only verified repayments are shown here. Fides does not turn a waiver into a repayment entry.</Body></Card>
+   <Card title="Verified repayments">{verified.length===0?<Body>No verified repayments recorded.</Body>:verified.map(row=><View key={row.id}><Amount minor={row.amount_minor} currency={row.currency} size="row"/><Body supporting>{dateOnlyLabel(row.payment_date)} · reported by {row.reported_by.display_name}</Body></View>)}<Body supporting>Only verified repayments are shown here. Fides does not turn a waiver into a repayment entry.</Body></Card>
    {canRequestMutualClosure(snapshot.parent,snapshot.rows)&&!requesting&&!createPending&&<Button title="Request mutual closure" onPress={()=>{setNote("");setValidation(null);setRequesting(true);}}/>}
    {createPending&&!requesting&&<Button title="Review earlier mutual-closure request" variant="secondary" onPress={()=>setRequesting(true)}/>}
    {requesting&&<Card title="Request mutual closure"><Body>Both you and the other person must agree. The remaining verified balance will be waived.</Body><Body supporting>The server will record the authoritative verified outstanding amount when this request is created.</Body>
@@ -21,7 +26,7 @@ export function MutualClosureSection({id,onChanged}:{id:string;onChanged:()=>voi
    {!snapshot.rows.length&&!requesting&&<EmptyState title="No mutual-closure requests" message="When eligible, either participant can request closure by mutual agreement."/>}
    {snapshot.rows.map(row=><Card key={row.id}><StatusChip label={closureStatusLabel(row,data.user)} status={row.status==="REQUESTED"?"PENDING":row.status==="ACCEPTED"?"CLOSED":undefined}/><Body>Requested by {row.requested_by.display_name}</Body>
     <Body>{row.status==="ACCEPTED"?"Verified outstanding at closure":"Verified outstanding reviewed"}</Body><Amount minor={row.outstanding_snapshot_minor} currency={row.currency} size="row"/><Body>{row.status==="ACCEPTED"?"Waived amount":"Amount proposed to be waived"}</Body><Amount minor={row.waived_amount_minor} currency={row.currency} size="row"/>
-    {row.note&&<Body>{row.note}</Body>}{row.decided_by&&<Body supporting>{row.decided_by.display_name} · {row.decided_at}</Body>}{row.status==="ACCEPTED"&&<Body>Closed by mutual agreement</Body>}
+    {row.note&&<Body>{row.note}</Body>}{row.decided_by&&<Body supporting>{row.decided_by.display_name} · {formatTimestamp(row.decided_at!,state.user.timezone)}</Body>}{row.status==="ACCEPTED"&&<Body>Closed by mutual agreement</Body>}
     {row.status==="REQUESTED"&&row.counterparty.id===data.user&&pendingVerification&&<View accessibilityLiveRegion="polite"><Body>A repayment is pending verification. Resolve it before accepting mutual closure.</Body></View>}
     {mutualClosureActions(row,data.user).map(action=>{const pending=data.pending(action,row.id),blockedByVerification=action==="accept"&&pendingVerification;return <Button key={action} title={pending?"Retry same "+action:action==="accept"?"Accept":action==="reject"?"Reject":"Cancel request"} variant={action==="accept"?"primary":"secondary"} disabled={data.busy||blockedByVerification||!!pending?.blocked||!!pending?.needsReconcile} onPress={()=>setConfirmation({row,action})}/>;})}
    </Card>)}

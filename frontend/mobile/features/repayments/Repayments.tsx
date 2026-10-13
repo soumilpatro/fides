@@ -8,9 +8,11 @@ import { statusLabels } from "@fides/shared/commitments/model";
 import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
 import { Amount, Body, Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, Screen, StatusChip, TextField, Title } from "../../components/ui";
 import { useRepayments } from "./useRepayments";
+import { useAuth } from "../auth/useAuth";
+import { notificationTimestamp as formatTimestamp } from "@fides/shared/notifications/presentation";
 function Feedback({error,busy}:{error:string|null;busy:boolean}) {return <>{error && <ErrorState message={error}/>}{busy && <LoadingState message="Loading the authoritative repayment record…"/>}</>;}
-function Facts({row}:{row:Repayment}) {return <><PersonRow name={row.reported_by.display_name} role="Reported by"/><Amount minor={row.amount_minor} currency={row.currency} size="card"/><StatusChip label={labels[row.status]} status={semantics[row.status]}/>
-  <Body>Payment date: {dateOnlyLabel(row.payment_date)}</Body><Body supporting>Reported at: {row.reported_at}</Body><Body>Note: {row.note || "No note"}</Body>
+function Facts({row}:{row:Repayment}) {const {state}=useAuth();if(state.status!=="authenticated")return null;return <><PersonRow name={row.reported_by.display_name} role="Reported by"/><Amount minor={row.amount_minor} currency={row.currency} size="card"/><StatusChip label={labels[row.status]} status={semantics[row.status]}/>
+  <Body>Payment date: {dateOnlyLabel(row.payment_date)}</Body><Body supporting>Reported at: {formatTimestamp(row.reported_at,state.user.timezone)}</Body><Body>Note: {row.note || "No note"}</Body>
   {row.status === "PENDING_VERIFICATION" && <Body supporting>Reported, not yet verified. The other participant still needs to verify or dispute this repayment.</Body>}</>;}
 export function RepaymentsSection({id,onReport,onDetail}:{id:string;onReport:()=>void;onDetail:(id:string)=>void}) {
  const data=useRepayments(id);
@@ -46,14 +48,16 @@ function Confirmation({action,onCancel,onSubmit}:{action:DecisionAction;onCancel
 }
 export function RepaymentDetail({id,onBack}:{id:string;onBack:()=>void}) {
  const data=useRepayments(undefined,id),[confirmation,setConfirmation]=useState<DecisionAction|null>(null),row=data.data?.detail,parent=data.data?.parent;
+ const {state}=useAuth();
  const eligible=!!row && !!parent && data.fresh && canDecide(row,parent,data.userId);
+ if(state.status!=="authenticated")return null;
  return <Screen><Button title="Back to commitment" variant="quiet" onPress={onBack}/><Title>Repayment detail</Title><Button title="Refresh repayment and history" variant="quiet" disabled={data.busy} onPress={()=>void data.refresh()}/><Feedback error={data.error} busy={data.busy}/>
    {row && <><Card><Facts row={row}/></Card>{parent && <Body>Commitment: {statusLabels[parent.status]}</Body>}
      {row.status === "PENDING_VERIFICATION" && row.reported_by.id === data.userId && <Body>You reported this repayment. Only the other participant can verify or dispute it.</Body>}
      {eligible && (["verify","dispute"] as const).map(action=>{const pending=data.pending(action);return <Button key={action} title={pending ? "Retry same "+action : decisionCopy(action).button} variant={action === "dispute" ? "secondary" : "primary"} disabled={data.busy || data.actionBlocked(action) || !!pending?.blocked || !!pending?.needsReconcile}
        onPress={()=>{if(pending)void data.decide(action,JSON.parse(pending.payload));else setConfirmation(action);}}/>;})}
      {(["verify","dispute"] as const).some(action=>data.pending(action)) && <Body>An earlier decision may have completed. Refresh the record and history before explicitly retrying the original decision. The opposite action remains unavailable.</Body>}
-     <Card title="Verification history">{data.data?.history ? data.data.history.length ? data.data.history.map(entry=><View style={styles.stack} key={entry.id}><PersonRow name={entry.decided_by.display_name} role="Decision by"/><StatusChip label={labels[entry.decision]} status={semantics[entry.decision]}/><Body supporting>{entry.decided_at}</Body><Body>{entry.decision_note || "No decision note"}</Body></View>) : <Body>No verification or dispute decision yet.</Body> : <Body>Refresh to load current history.</Body>}</Card>
+     <Card title="Verification history">{data.data?.history ? data.data.history.length ? data.data.history.map(entry=><View style={styles.stack} key={entry.id}><PersonRow name={entry.decided_by.display_name} role="Decision by"/><StatusChip label={labels[entry.decision]} status={semantics[entry.decision]}/><Body supporting>{formatTimestamp(entry.decided_at,state.user.timezone)}</Body><Body>{entry.decision_note || "No decision note"}</Body></View>) : <Body>No verification or dispute decision yet.</Body> : <Body>Refresh to load current history.</Body>}</Card>
      {confirmation && <Confirmation action={confirmation} onCancel={()=>setConfirmation(null)} onSubmit={body=>{const action=confirmation;setConfirmation(null);void data.decide(action,body);}}/>}
    </>}
  </Screen>;

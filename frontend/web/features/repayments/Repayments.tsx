@@ -9,10 +9,12 @@ import { statusLabels } from "@fides/shared/commitments/model";
 import { dateOnlyLabel } from "@fides/shared/dashboard/due-presentation";
 import { Button, Card, EmptyState, ErrorState, LoadingState, PersonRow, StatusChip, TextField } from "../../components/ui";
 import { useRepayments } from "./useRepayments";
+import { useAuth } from "../auth/useAuth";
+import { notificationTimestamp as formatTimestamp } from "@fides/shared/notifications/presentation";
 import { trapConfirmationFocus } from "../f6-dialog";
 function Feedback({error,busy}:{error:string|null;busy:boolean}) { return <>{error && <ErrorState message={error}/>} {busy && <LoadingState message="Loading the authoritative repayment record…"/>}</>; }
-function Facts({row}:{row:Repayment}) { return <><PersonRow name={row.reported_by.display_name} role="Reported by"/><strong className="amount amount--card">{formatMoney(row.amount_minor,row.currency)}</strong><StatusChip label={labels[row.status]} status={semantics[row.status]}/>
-  <dl className="commitment-facts"><dt>Payment date</dt><dd>{dateOnlyLabel(row.payment_date)}</dd><dt>Reported at</dt><dd>{row.reported_at}</dd><dt>Note</dt><dd>{row.note || "No note"}</dd></dl>
+function Facts({row}:{row:Repayment}) { const {state}=useAuth(); if(state.status!=="authenticated")return null; return <><PersonRow name={row.reported_by.display_name} role="Reported by"/><strong className="amount amount--card">{formatMoney(row.amount_minor,row.currency)}</strong><StatusChip label={labels[row.status]} status={semantics[row.status]}/>
+  <dl className="commitment-facts"><dt>Payment date</dt><dd>{dateOnlyLabel(row.payment_date)}</dd><dt>Reported at</dt><dd><time dateTime={row.reported_at}>{formatTimestamp(row.reported_at,state.user.timezone)}</time></dd><dt>Note</dt><dd>{row.note || "No note"}</dd></dl>
   {row.status === "PENDING_VERIFICATION" && <p className="supporting">Reported, not yet verified. The other participant still needs to verify or dispute this repayment.</p>}</>; }
 export function RepaymentsSection({id}:{id:string}) {
   const data=useRepayments(id);
@@ -20,7 +22,7 @@ export function RepaymentsSection({id}:{id:string}) {
     <Button variant="quiet" disabled={data.busy} onClick={()=>void data.refresh()}>Refresh repayments</Button>
     {data.fresh && data.data && canReport(data.data.parent,data.userId) && <Link className="button button--primary" href={"/app/commitments/"+id+"/repayments/new"}>Report repayment</Link>}
     {data.data?.rows.length === 0 && <EmptyState title="No repayments reported" message="Reported repayments will appear here as separate records."/>}
-    {data.data?.rows.map(row=><Card key={row.id}><Facts row={row}/><Link className="button button--quiet" href={"/app/repayments/"+row.id}>View repayment reported by {row.reported_by.display_name} · {formatMoney(row.amount_minor,row.currency)} · {row.payment_date}</Link></Card>)}
+    {data.data?.rows.map(row=><Card key={row.id}><Facts row={row}/><Link className="button button--quiet" href={"/app/repayments/"+row.id}>View repayment reported by {row.reported_by.display_name} · {formatMoney(row.amount_minor,row.currency)} · {dateOnlyLabel(row.payment_date)}</Link></Card>)}
   </section>;
 }
 export function ReportRepayment({id}:{id:string}) {
@@ -54,7 +56,9 @@ function Confirmation({action,onCancel,onSubmit}:{action:DecisionAction;onCancel
 }
 export function RepaymentDetail({id}:{id:string}) {
   const data=useRepayments(undefined,id),[confirmation,setConfirmation]=useState<DecisionAction|null>(null),row=data.data?.detail,parent=data.data?.parent;
+  const {state}=useAuth();
   const eligible=!!row && !!parent && data.fresh && canDecide(row,parent,data.userId);
+  if(state.status!=="authenticated")return null;
   return <div className="commitments-feature">{parent && <Link className="auth-back" href={"/app/commitments/"+parent.id}>← Commitment</Link>}<h1>Repayment detail</h1>
     <Button variant="quiet" disabled={data.busy} onClick={()=>void data.refresh()}>Refresh repayment and history</Button><Feedback error={data.error} busy={data.busy}/>
     {row && <><Card><Facts row={row}/></Card>{parent && <p>Commitment: {statusLabels[parent.status]}</p>}
@@ -62,7 +66,7 @@ export function RepaymentDetail({id}:{id:string}) {
       {eligible && <div className="button-row">{(["verify","dispute"] as const).map(action=>{const pending=data.pending(action);return <Button key={action} variant={action === "dispute" ? "secondary" : "primary"} disabled={data.busy || data.actionBlocked(action) || !!pending?.blocked || !!pending?.needsReconcile}
         onClick={()=>{if(pending)void data.decide(action,JSON.parse(pending.payload));else setConfirmation(action);}}>{pending ? "Retry same "+action : decisionCopy(action).button}</Button>;})}</div>}
       {(["verify","dispute"] as const).some(action=>data.pending(action)) && <p role="status">An earlier decision may have completed. Refresh the record and history before explicitly retrying the original decision. The opposite action remains unavailable.</p>}
-      <Card title="Verification history">{data.data?.history ? data.data.history.length ? data.data.history.map(entry=><div key={entry.id}><PersonRow name={entry.decided_by.display_name} role="Decision by"/><StatusChip label={labels[entry.decision]} status={semantics[entry.decision]}/><p>{entry.decided_at}</p><p>{entry.decision_note || "No decision note"}</p></div>) : <p>No verification or dispute decision yet.</p> : <p>Refresh to load current history.</p>}</Card>
+      <Card title="Verification history">{data.data?.history ? data.data.history.length ? data.data.history.map(entry=><div key={entry.id}><PersonRow name={entry.decided_by.display_name} role="Decision by"/><StatusChip label={labels[entry.decision]} status={semantics[entry.decision]}/><p><time dateTime={entry.decided_at}>{formatTimestamp(entry.decided_at,state.user.timezone)}</time></p><p>{entry.decision_note || "No decision note"}</p></div>) : <p>No verification or dispute decision yet.</p> : <p>Refresh to load current history.</p>}</Card>
       {confirmation && <Confirmation action={confirmation} onCancel={()=>setConfirmation(null)} onSubmit={body=>{const action=confirmation;setConfirmation(null);void data.decide(action,body);}}/>}
     </>}
   </div>;
