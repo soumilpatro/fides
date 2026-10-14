@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { ProtectedModal as Modal } from "../../navigation/ProtectedModal";
 import { colors, radii, spacing } from "@fides/shared/tokens/index";
 import type { Connection } from "@fides/shared/api/connections";
 import { actionLabel, availableConnectionActions, confirmation, connectionSections, otherParticipant,

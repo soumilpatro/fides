@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
+import { ProtectedModal as Modal } from "../../navigation/ProtectedModal";
 import { colors,radii,spacing } from "@fides/shared/tokens/index";
 import type { Extension, ExtensionRequest } from "@fides/shared/api/extensions";
 import { canRequestExtension, extensionActions, extensionBody } from "@fides/shared/extensions/model";

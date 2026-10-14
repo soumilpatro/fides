@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "react-native";
+import { ProtectedModal as Modal } from "../../navigation/ProtectedModal";
 import { colors, radii, spacing } from "@fides/shared/tokens/index";
 import type { Repayment, RepaymentRequest, DecisionRequest } from "@fides/shared/api/repayments";
 import { formatMoney } from "@fides/shared/domain/money";

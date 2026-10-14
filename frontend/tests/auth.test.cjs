@@ -1,4 +1,4 @@
-// Existing Node runner and workspace TypeScript: no added test framework.
+// Node runner and workspace TypeScript; lifecycle tests use React's test renderer.
 const fs = require("node:fs");
 const ts = require("typescript");
 require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
@@ -137,3 +137,6 @@ test("secure deletion failure is surfaced without keeping protected UI", async (
   await f.session.logout(); assert.equal(f.session.accessToken(), null); assert.equal(f.session.snapshot().status, "anonymous");
   assert.match(f.session.snapshot().error, /retry sign out/);
 });
+
+// Exercise real React reconciliation at the mobile auth/navigation boundary.
+require("./mobile-navigation.test.cjs");

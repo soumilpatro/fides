@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
+import { ProtectedModal as Modal } from "../../navigation/ProtectedModal";
 import { colors, controls, radii, spacing } from "@fides/shared/tokens/index";
 import type { CommitmentRequest, Terms } from "@fides/shared/api/commitments";
 import { initialForm, proposalBody, type ProposalForm } from "@fides/shared/commitments/form";

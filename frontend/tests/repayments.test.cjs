@@ -76,6 +76,9 @@ function mobileComponent(feature,name,hooks,props={},stateOverrides={}){
  require.extensions['.tsx']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,f);
  Module._load=function(request,parent,main){
   if(request==='react')return react;
+  // This copy/typography harness has no React reconciler. The real protected
+  // modal visibility/context lifecycle is covered by mobile-navigation tests.
+  if(request==='../../navigation/ProtectedModal')return{ProtectedModal:'Modal'};
   if(request==='react-native')return{...hosts,StyleSheet:{create:value=>value},Platform:{OS:'ios'}};
   if(Object.hasOwn(hooks,request))return hooks[request];
   if(request==='../auth/useAuth')return {useAuth:()=>({state:{status:'authenticated',user:{timezone:'Etc/UTC'}}})};
@@ -129,6 +132,7 @@ function datePolishView(platform,feature,component,zone,instant='2026-10-04T15:1
  Module._load=function(request,parent,main){
   if(request==='react')return react;
   if(request==='../auth/useAuth')return{useAuth:()=>({state:{status:'authenticated',user:{id:B,timezone:zone}}})};
+  if(request==='../../navigation/ProtectedModal')return{ProtectedModal:'Modal'};
   if(['./useRepayments','./useMutualClosure','./useExtensions'].includes(request))return{[request.slice(2)]:()=>snapshot};
   if(request==='next/link')return{__esModule:true,default:({children,...props})=>react.createElement('a',props,children)};
   if(request==='next/navigation')return{useRouter:()=>({push:id=>calls.push(id)})};

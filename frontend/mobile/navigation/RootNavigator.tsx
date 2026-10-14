@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { AuthIntent } from "@fides/shared/api/auth";
@@ -7,6 +7,8 @@ import { Brand } from "../components/Brand";
 import { Body, Button, EmptyState, LoadingState, Screen, Title } from "../components/ui";
 import { AuthFlow } from "../features/auth/AuthFlow";
 import { useAuth } from "../features/auth/useAuth";
+import { AuthContext, type AuthContextValue } from "../features/auth/AuthProvider";
+import { ProtectedPresentation } from "./ProtectedModal";
 import { Notifications } from "../features/notifications/Notifications";
 import { Profile } from "../features/profile/Profile";
 import { RepaymentDetail } from "../features/repayments/Repayments";
@@ -16,9 +18,36 @@ import { Commitments } from "../features/commitments/Commitments";
 import { Connections } from "../features/connections/Connections";
 import { FoundationScreen } from "../app/FoundationScreen";
 export function RootNavigator() {
-  const { state } = useAuth();
-  if (state.status === "loading") return <SafeAreaView style={styles.safe}><Screen><Brand /><LoadingState message="Resolving your session…" /></Screen></SafeAreaView>;
-  return <SafeAreaView style={styles.safe}>{state.status === "authenticated" ? <AuthenticatedShell /> : <Anonymous />}</SafeAreaView>;
+  const auth = useAuth();
+  const { state } = auth;
+  const [retained, setRetained] = useState<AuthContextValue | null>(null);
+  const [sessionBoundary, setSessionBoundary] = useState(0);
+  // React can batch anonymous -> authenticated into one render. Observe the
+  // actual session boundary so even an immediate same-account login resets it.
+  useEffect(() => auth.session.subscribe(() => {
+    if (auth.session.snapshot().status === "anonymous") {
+      setRetained(null);
+      setSessionBoundary(previous => previous + 1);
+    }
+  }), [auth.session]);
+  // Retain presentation state only. The live session and API clients remain
+  // authoritative; this subtree is hidden and inaccessible while reconciling.
+  if (state.status === "authenticated" && retained !== auth) setRetained(auth);
+  if (state.status === "anonymous" && retained !== null) setRetained(null);
+  const presentation = state.status === "authenticated" ? auth : state.status === "loading" ? retained : null;
+  const visible = state.status === "authenticated";
+  return <SafeAreaView style={styles.safe}>
+    {presentation?.state.status === "authenticated" && <AuthContext.Provider key={presentation.state.user.id + ":" + sessionBoundary} value={presentation}>
+      <ProtectedPresentation.Provider value={visible}>
+        <View style={visible ? styles.shell : styles.hidden} pointerEvents={visible ? "auto" : "none"}
+          accessibilityElementsHidden={!visible} importantForAccessibility={visible ? "auto" : "no-hide-descendants"}>
+          <AuthenticatedShell />
+        </View>
+      </ProtectedPresentation.Provider>
+    </AuthContext.Provider>}
+    {state.status === "loading" && <Screen><Brand /><LoadingState message="Resolving your session…" /></Screen>}
+    {state.status === "anonymous" && <Anonymous />}
+  </SafeAreaView>;
 }
 function Anonymous() {
   const { state, session } = useAuth();
@@ -49,6 +78,8 @@ function AuthenticatedShell() {
 }
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },
+  shell: { flex: 1 },
+  hidden: { display: "none" },
   header: { padding: spacing.md, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderColor: colors.border },
   entry: { minHeight: controls.button, justifyContent: "center", padding: spacing.sm },
   label: { fontFamily: "Manrope", fontSize: typography.size.supporting, color: colors.text.primary },
