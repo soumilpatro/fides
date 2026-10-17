@@ -1,15 +1,16 @@
-name: Frontend post-F6 validation
+name: Frontend validation
 
 on:
+  pull_request:
+    branches: [main]
   push:
-    branches:
-      - feat/post-f6-follow-up
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  validate:
+  frontend:
     runs-on: ubuntu-latest
     defaults:
       run:

@@ -4,16 +4,58 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-
-# Environment
-.env
-
-# Test / lint caches
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 .coverage
+.coverage.*
 htmlcov/
+*.log
 
-# OS
+# Environment / credentials
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+*.crt
+*.mobileprovision
+*.keystore
+*.jks
+secrets/
+credentials/
+
+# Database / local runtime
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.dump
+*.bak
+*.backup
+pgdata/
+
+# Node / React / Expo
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+.expo/
+**/.expo/
+dist/
+**/dist/
+coverage/
+**/coverage/
+*.tsbuildinfo
+frontend/**/next-env.d.ts
+
+# IDE / OS
+.idea/
+.vscode/
 .DS_Store
 Thumbs.db
