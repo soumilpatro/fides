@@ -13,7 +13,8 @@
 - [ ] Verify no tracked `.env`, exported data, key stores, certificates, or binary credentials. `.gitignore` does not untrack existing files.
 - [ ] Verify no live configuration depends on the development-only credentials in `docker-compose.yml`.
 - [ ] Confirm all logos, image assets and specification documents can legally be published.
-- [ ] Decide an explicit license and document ownership/teammate permission; public visibility alone does not grant an open-source license.
+- [x] Record maintainer's licensing preference: publicly viewable, **all rights reserved** (see `RIGHTS.md`).
+- [ ] Confirm copyright ownership and written permission from teammates/third-party asset rights holders before public release.
 - [ ] Enable GitHub secret scanning / push protection where available, Dependabot alerts, private vulnerability reporting and reasonable branch rules.
 - [ ] Run frontend checks and backend tests with an isolated test database; do not run tests against a real production or staging dataset.
 - [ ] Inspect PR #22's mobile navigation fix on physical iPhones (background/resume, drafts, open modal, logout and account switch). Automated tests are not a substitute.
