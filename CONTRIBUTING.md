@@ -23,4 +23,4 @@ Thanks for your interest. Fides is an early-stage financial recordkeeping MVP wi
 
 ## Licensing
 
-No open-source license has yet been selected. Do not assume that repository visibility constitutes permission to reuse code; coordinate licensing and contribution rights with the repository owner before substantial external contributions.
+**All rights reserved.** No open-source license is granted. Contributions are not automatically accepted; agree on contributor rights and any necessary written permission with the maintainer before making substantial submissions. See [RIGHTS.md](RIGHTS.md).
