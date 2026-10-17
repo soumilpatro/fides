@@ -118,7 +118,7 @@ These commands are documented entry points, not a promise that they were rerun d
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development and contribution expectations and [SECURITY.md](SECURITY.md) to report vulnerabilities privately.
 
-**License: not yet selected.** Public GitHub visibility does **not** itself grant permission to reuse, distribute, or modify source code. A license should be selected deliberately by the rights holder(s) before inviting broad reuse.
+**Publicly viewable; all rights reserved.** Fides is not open-source licensed. Public visibility permits viewing and linking, not general reuse or redistribution. Read [RIGHTS.md](RIGHTS.md). The team must confirm contribution/asset ownership before publishing.
 
 ## Public-release caution
 
