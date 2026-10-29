@@ -214,7 +214,7 @@ BEGIN
                                   ('commitment_id','status','amount_minor','currency','reported_by_user_id'))
                               OR (item.relname='notification_preferences' AND column_item.attname IN
                                   ('user_id','due_reminders_enabled','overdue_reminders_enabled'))
-                              OR (item.relname='notification_events' AND column_item.attname='id'))) OR
+                              OR (item.relname='notification_events' AND column_item.attname IN ('id','dedupe_key')))) OR
                             (privilege='INSERT' AND item.relname='notification_events')
                         ELSE item.relname='notification_events' AND
                             ((privilege='SELECT' AND column_item.attname IN ('id','created_at'))

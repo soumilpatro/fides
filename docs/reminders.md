@@ -35,7 +35,8 @@ cleanup SKIP LOCKED behavior, not a new singleton lock or background worker.
 There is no web-worker background loop, broker, new provider, or dependency.
 Exit 0 means completion/no-op; startup, database, or corrupt-candidate partial
 failure yields a non-zero reminder exit. Logs contain bounded categories/counts,
-never exception details, recipient identifiers, SQL binds, or private payloads.
+with sanitized application stack locations on fatal failure; never exception messages,
+source lines, locals, recipient identifiers, SQL binds, or private payloads.
 
 The reminder pass captures a finite UUID scan frontier and reads at most 100
 commitments per page. Financial inputs, current effective terms, installments,
