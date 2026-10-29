@@ -331,7 +331,8 @@ $infrastructure$;
           'ON TABLE %I.repayments TO fides_reminders',schema_name);
       EXECUTE format('GRANT SELECT (user_id, due_reminders_enabled, overdue_reminders_enabled) '
           'ON TABLE %I.notification_preferences TO fides_reminders',schema_name);
-      EXECUTE format('GRANT SELECT (id) ON TABLE %I.notification_events TO fides_reminders',schema_name);
+      -- ON CONFLICT needs SELECT on the arbiter key even for DO NOTHING.
+      EXECUTE format('GRANT SELECT (id, dedupe_key) ON TABLE %I.notification_events TO fides_reminders',schema_name);
       EXECUTE format('GRANT INSERT ON TABLE %I.notification_events TO fides_reminders',schema_name);
       -- PostgreSQL 16 ddl-priv.html: FOR UPDATE requires UPDATE on at least one
       -- column. Cleanup reads id/created_at and deletes by id (ORM primary-key

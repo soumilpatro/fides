@@ -209,7 +209,7 @@ are projected as full row JSON). Other SELECT grants are column-scoped: users
 (id, status); installments (id, commitment_id, terms_version_id, due_date,
 sequence_no); repayments (commitment_id, status, amount_minor, currency,
 reported_by_user_id); preferences (user_id, due_reminders_enabled,
-overdue_reminders_enabled); notifications (id for RETURNING). It has INSERT only
+overdue_reminders_enabled); notifications (id for RETURNING, dedupe_key for ON CONFLICT). It has INSERT only
 on notifications, and cannot read users' phones/profile fields or auth data. Cleanup
 has SELECT(id, created_at), DELETE, and UPDATE(id) only on notification_events.
 PostgreSQL's FOR UPDATE rule requires UPDATE on at least one column; this is why
