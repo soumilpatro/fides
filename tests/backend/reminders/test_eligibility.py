@@ -128,6 +128,7 @@ def test_reenabled_current_overdue_only(env):
         ("Pacific/Kiritimati", "2026-09-10T12:00:00+00:00", "UPCOMING_DUE"),
         ("America/Los_Angeles", "2026-09-11T02:00:00+00:00", None),
         ("Asia/Kolkata", "2026-09-10T20:00:00+00:00", "UPCOMING_DUE"),
+        ("Asia/Calcutta", "2026-09-10T20:00:00+00:00", "UPCOMING_DUE"),
     ],
 )
 def test_contractual_timezone(env, timezone, stamp, expected):

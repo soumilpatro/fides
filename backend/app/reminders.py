@@ -223,8 +223,11 @@ def insert_candidate(db, query, row, candidate, now, *, live_clock=False):
     )
     if live_clock:
         timezone = row.CommitmentTermsVersion.schedule_definition["due_timezone"]
+        # Python tzdata accepts this historical alias, but some PostgreSQL
+        # timezone installations do not. Preserve the same local-date semantics.
+        pg_timezone = "Asia/Kolkata" if timezone == "Asia/Calcutta" else timezone
         unchanged.append(
-            cast(func.timezone(timezone, func.statement_timestamp()), Date)
+            cast(func.timezone(pg_timezone, func.statement_timestamp()), Date)
             == now.astimezone(ZoneInfo(timezone)).date()
         )
     values = dict(
