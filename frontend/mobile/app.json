@@ -1,30 +1,37 @@
 {
-  "expo": {
-    "name": "Fides",
-    "slug": "fides-foundation",
-    "version": "0.0.0",
-    "orientation": "portrait",
-    "userInterfaceStyle": "light",
-    "plugins": [
-      [
-        "expo-secure-store",
-        {
-          "configureAndroidBackup": true,
-          "faceIDPermission": false
-        }
-      ]
-    ],
-    "icon": "./assets/fides-app-icon-indigo-1024x1024.png",
-    "splash": {
-      "image": "./assets/fides-splash-portrait-1170x2532.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F7F6F3"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/fides-app-icon-indigo-1024x1024.png",
-        "backgroundColor": "#F7F6F3"
-      }
-    }
-  }
+    "expo":  {
+                 "name":  "Fides",
+                 "slug":  "fides-foundation",
+                 "version":  "0.0.0",
+                 "orientation":  "portrait",
+                 "userInterfaceStyle":  "light",
+                 "plugins":  [
+                                 [
+                                     "expo-secure-store",
+                                     {
+                                         "configureAndroidBackup":  true,
+                                         "faceIDPermission":  false
+                                     }
+                                 ],
+                                 "expo-font",
+                                 "expo-status-bar",
+                                 "expo-splash-screen",
+                                 [
+                                     "expo-splash-screen",
+                                     {
+                                         "imageWidth":  200,
+                                         "backgroundColor":  "#F7F6F3",
+                                         "resizeMode":  "contain",
+                                         "image":  "./assets/fides-splash-portrait-1170x2532.png"
+                                     }
+                                 ]
+                             ],
+                 "icon":  "./assets/fides-app-icon-indigo-1024x1024.png",
+                 "android":  {
+                                 "adaptiveIcon":  {
+                                                      "foregroundImage":  "./assets/fides-app-icon-indigo-1024x1024.png",
+                                                      "backgroundColor":  "#F7F6F3"
+                                                  }
+                             }
+             }
 }
